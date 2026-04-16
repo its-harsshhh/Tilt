@@ -41,7 +41,7 @@ export default function LandingPage({ onStartScreenShare }) {
 
         {/* Subheading — WCAG AA: slate-600 = #475569, 7:1 on white */}
         <p className="font-body text-base md:text-lg text-slate-600 max-w-lg text-center mb-9 leading-relaxed">
-          AI that understands what you're doing and helps you choose — without taking over.
+          AI that learns your way of deciding and gets better with every choice.
         </p>
 
         {/* CTA Button — gradient, border, text shadow */}
