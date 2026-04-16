@@ -370,59 +370,78 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
     <div data-testid="floating-palette" style={{ fontFamily: "'Inter', -apple-system, sans-serif", background: 'linear-gradient(180deg, rgba(15,23,42,0.97) 0%, rgba(2,6,23,0.99) 100%)', color: '#fff', height: '100vh', display: 'flex', flexDirection: 'column' }} onKeyDown={handleKeyDown} tabIndex={-1}>
 
       {/* Header */}
-      <div style={{ padding: '8px 12px 4px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+      <div style={{ padding: '8px 12px 6px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '3px', flex: 1 }}>
-            {[{ key: 'tilt', label: 'Tilt' }, { key: 'decide', label: 'Decide' }].map(t => (
+          <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '3px', flex: 1 }}>
+            {[
+              { key: 'tilt', label: 'Tilt', sub: 'Ask & Guide' },
+              { key: 'decide', label: 'Decide', sub: '3 Options' },
+            ].map(t => (
               <button key={t.key} onClick={() => switchMode(t.key)} data-testid={`mode-${t.key}-btn`}
-                style={{ flex: 1, padding: '6px 0', borderRadius: '6px', border: 'none', cursor: 'pointer', background: mode === t.key ? 'rgba(255,255,255,0.1)' : 'transparent', color: mode === t.key ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)', fontSize: '12px', fontWeight: '600', fontFamily: "'Inter', sans-serif" }}>{t.label}</button>
+                style={{
+                  flex: 1, padding: '5px 0 4px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                  background: mode === t.key ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px',
+                  fontFamily: "'Inter', sans-serif", transition: 'all 0.15s',
+                }}>
+                <span style={{ fontSize: '12px', fontWeight: '600', color: mode === t.key ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)' }}>{t.label}</span>
+                <span style={{ fontSize: '9px', fontWeight: '500', color: mode === t.key ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.15)', letterSpacing: '0.02em' }}>{t.sub}</span>
+              </button>
             ))}
           </div>
           {mode === 'tilt' && (
             <button onClick={() => { setVoiceMode(v => !v); if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } }} data-testid="voice-mode-btn"
               style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', background: voiceMode ? 'rgba(129,140,248,0.2)' : 'rgba(255,255,255,0.04)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke={voiceMode ? '#818cf8' : 'rgba(255,255,255,0.3)'}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke={voiceMode ? '#818cf8' : 'rgba(255,255,255,0.25)'}>
                 {voiceMode ? <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></> : <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></>}
               </svg>
             </button>
           )}
           {onCollapse && (
             <button onClick={onCollapse} data-testid="collapse-btn" style={{ width: '28px', height: '28px', borderRadius: '8px', border: 'none', background: 'rgba(255,255,255,0.04)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           )}
         </div>
-        {hasCtx && !guideActive && (
-          <div data-testid="pip-screen-context" style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', background: 'rgba(99,102,241,0.05)', borderRadius: '8px', padding: '5px 10px', border: '1px solid rgba(99,102,241,0.08)' }}>
-            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#818cf8', flexShrink: 0 }} />
-            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{screenContext}</p>
-          </div>
-        )}
       </div>
 
       {/* Content */}
-      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
-        {/* ====== TILT TAB ====== */}
-        {mode === 'tilt' && messages.length === 0 && !loading && !guideActive && (
-          <div style={{ padding: '16px 0' }}>
-            {insight && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '4px 10px', marginBottom: '12px' }} data-testid="pip-insight">
-                <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#818cf8' }} />
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: '500' }}>{insight}</span>
-              </div>
-            )}
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', marginBottom: '10px', fontWeight: '500' }}>
-              {hasCtx ? 'Based on what you\'re doing...' : 'What can I help with?'}
+        {/* Screen context — compact, purposeful */}
+        {hasCtx && !guideActive && messages.length === 0 && !loading && (
+          <div data-testid="pip-screen-context" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(99,102,241,0.04)', borderRadius: '8px', padding: '6px 10px', border: '1px solid rgba(99,102,241,0.06)' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(129,140,248,0.5)" strokeWidth="2" style={{ flexShrink: 0 }}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ color: 'rgba(129,140,248,0.5)', fontWeight: '600' }}>Seeing: </span>{screenContext}
             </p>
+          </div>
+        )}
+
+        {/* ====== TILT TAB — empty state ====== */}
+        {mode === 'tilt' && messages.length === 0 && !loading && !guideActive && (
+          <div style={{ padding: '12px 0 0' }}>
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', fontWeight: '500', margin: '0 0 4px', lineHeight: '1.4' }}>
+              {hasCtx ? 'I can see your screen.' : 'Your AI co-pilot.'}
+            </p>
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)', margin: '0 0 14px' }}>
+              {hasCtx ? 'Ask me anything or pick a prompt below.' : 'Share your screen and ask anything.'}
+            </p>
+            <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.2)', margin: '0 0 8px' }}>Try asking</p>
             <Pills items={TILT_PILLS} onSelect={(p) => handlePillSelect(p)} testPrefix="tilt" />
           </div>
         )}
 
-        {/* ====== DECIDE TAB — empty state pills ====== */}
+        {/* ====== DECIDE TAB — empty state ====== */}
         {mode === 'decide' && decideMessages.length === 0 && !loading && !decisions && (
-          <div style={{ padding: '16px 0' }}>
-            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', marginBottom: '10px', fontWeight: '500' }}>Quick actions</p>
+          <div style={{ padding: '12px 0 0' }}>
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', fontWeight: '500', margin: '0 0 4px', lineHeight: '1.4' }}>
+              Get Safe, Smart & Bold options.
+            </p>
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)', margin: '0 0 14px' }}>
+              Describe a situation and I'll give you 3 ways to handle it.
+            </p>
+            <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.2)', margin: '0 0 8px' }}>Quick prompts</p>
             <Pills items={DECIDE_PILLS} onSelect={(p) => handlePillSelect(p)} testPrefix="decide" />
           </div>
         )}
@@ -500,7 +519,7 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
         {/* Context pills — shown after selecting a decision */}
         {mode === 'decide' && selectedType && !decisions && !loading && (
           <div style={{ marginTop: '4px' }}>
-            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', marginBottom: '6px', fontWeight: '500' }}>Refine this</p>
+            <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.2)', marginBottom: '6px' }}>Refine this response</p>
             <Pills items={CONTEXT_PILLS} onSelect={handleContextPill} testPrefix="context" />
           </div>
         )}
@@ -538,6 +557,10 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
           )}
         </div>
         {error && <p style={{ color: '#f87171', fontSize: '10px', marginTop: '4px', fontFamily: 'monospace' }} data-testid="pip-error">{error}</p>}
+        {/* Subtle preference footer */}
+        {insight && messages.length === 0 && !loading && (
+          <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.12)', margin: '4px 0 0', textAlign: 'center' }} data-testid="pip-insight">{insight}</p>
+        )}
       </div>
 
       <style>{`
