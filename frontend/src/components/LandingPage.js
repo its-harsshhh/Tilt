@@ -57,7 +57,7 @@ export default function LandingPage({ onStartScreenShare }) {
             textShadow: '0 1px 2px rgba(0,0,0,0.3)',
           }}
         >
-          Start Decision Layer
+          Let's decide
         </button>
 
         {/* Hint — WCAG AA compliant */}

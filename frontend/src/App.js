@@ -84,11 +84,13 @@ export default function App() {
         e.preventDefault();
         if (isSharing) {
           if (pipSupported) {
-            // Open or expand the floating palette
             openFloatingPalette(captureContextRef.current);
           } else {
             setPaletteOpen((prev) => !prev);
           }
+        } else {
+          // On landing page — trigger screen share
+          startScreenShare();
         }
       }
       if (e.key === 'Escape' && paletteOpen) {
