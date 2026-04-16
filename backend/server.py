@@ -244,15 +244,30 @@ async def tilt_unified(request: TiltRequest):
 
 
 def _is_guidance_request(message: str) -> bool:
-    """Heuristic: detect if the user is asking for step-by-step guidance."""
+    """Heuristic: detect if the user is asking for step-by-step guidance or wants an action done on screen."""
     msg = message.lower().strip()
     guide_triggers = [
-        "how do i ", "how to ", "show me how", "guide me", "help me ",
-        "walk me through", "take me to", "where do i ", "where is ",
-        "i want to ", "i need to ", "can you show", "navigate to",
-        "delete this", "create a ", "set up ", "configure ", "change the",
-        "update the", "remove the", "add a ", "open the", "find the",
-        "go to ", "click on", "enable ", "disable ", "turn on", "turn off",
+        # Questions
+        "how do i ", "how to ", "how can i ",
+        # Requests
+        "show me", "guide me", "help me ", "walk me through", "take me to",
+        "can you show", "can you help",
+        # Location
+        "where do i ", "where is ", "where can i ",
+        # Intent - "I want/need"
+        "i want to ", "i need to ", "i'd like to ",
+        # Direct commands - actions on screen
+        "give me ", "get me ", "get the ", "copy the ", "share the ", "send the ",
+        "open ", "close ", "click ", "press ", "tap ", "select ", "scroll ",
+        "navigate to", "go to ", "switch to ", "move to ",
+        "delete ", "remove ", "create ", "add ", "set up ", "configure ",
+        "change ", "update ", "edit ", "modify ", "rename ",
+        "enable ", "disable ", "turn on", "turn off",
+        "find ", "search ", "look for ", "locate ",
+        "download ", "upload ", "export ", "import ", "save ",
+        "log in", "log out", "sign in", "sign out", "sign up",
+        # Shortened imperatives
+        "do this", "do that", "make it ", "put ", "drag ",
     ]
     return any(msg.startswith(t) or t in msg for t in guide_triggers)
 
