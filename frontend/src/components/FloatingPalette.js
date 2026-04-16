@@ -290,9 +290,26 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
   // ===== SUBMIT =====
   const handleSubmit = useCallback(() => {
     if (!input.trim() || submittingRef.current) return;
+    // /clear command — reset current tab to empty/default state
+    if (input.trim().toLowerCase() === '/clear') {
+      setInput('');
+      setError(null);
+      if (mode === 'tilt') {
+        setTiltMessages([]);
+        if (guideActive) stopGuide();
+      } else {
+        setDecideMessages([]);
+        setDecisions(null);
+        setActiveIdx(-1);
+        setSelectedType(null);
+        setDecideInsights(null);
+        setLastDecideInput('');
+      }
+      return;
+    }
     if (mode === 'decide') sendDecide(input);
     else sendTilt(input);
-  }, [input, mode, sendTilt, sendDecide]);
+  }, [input, mode, sendTilt, sendDecide, guideActive, stopGuide]);
 
   const handlePillSelect = useCallback((pill) => {
     if (mode === 'tilt') { setInput(pill); setTimeout(() => sendTilt(pill), 50); }
