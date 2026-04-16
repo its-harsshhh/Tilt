@@ -90,7 +90,7 @@ export default function App() {
   }, [pipSupported]);
 
   return (
-    <div className="w-full h-screen bg-[#050505] overflow-hidden" data-testid="app-root">
+    <div className="w-full h-screen bg-white overflow-hidden" data-testid="app-root">
       {/* Landing page always visible */}
       <LandingPage
         onStartScreenShare={startScreenShare}
