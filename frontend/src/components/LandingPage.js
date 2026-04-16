@@ -1,92 +1,77 @@
 import React from 'react';
 import { Command } from 'lucide-react';
 
+// Color illustrations as inline SVGs — animate on card hover
+const illustrations = {
+  eye: (
+    <svg width="40" height="40" viewBox="0 0 80 80" fill="none" className="group-hover:scale-110 transition-transform duration-500">
+      <circle cx="40" cy="40" r="28" fill="#EEF2FF" className="group-hover:fill-indigo-100 transition-colors duration-500"/>
+      <path d="M16 40s10-16 24-16 24 16 24 16-10 16-24 16-24-16-24-16z" fill="#C7D2FE" className="group-hover:fill-indigo-300 transition-colors duration-500"/>
+      <circle cx="40" cy="40" r="8" fill="#6366F1"/>
+      <circle cx="37" cy="37" r="3" fill="#fff" opacity="0.7"/>
+    </svg>
+  ),
+  bolt: (
+    <svg width="40" height="40" viewBox="0 0 80 80" fill="none" className="group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
+      <circle cx="40" cy="40" r="28" fill="#FEF9C3" className="group-hover:fill-amber-100 transition-colors duration-500"/>
+      <polygon points="44,14 24,44 38,44 36,66 56,36 42,36" fill="#FBBF24"/>
+      <polygon points="44,14 24,44 38,44 36,66 56,36 42,36" fill="#F59E0B" opacity="0.5" transform="translate(2,2)"/>
+    </svg>
+  ),
+  check: (
+    <svg width="40" height="40" viewBox="0 0 80 80" fill="none" className="group-hover:scale-110 transition-transform duration-500">
+      <circle cx="40" cy="40" r="28" fill="#ECFDF5" className="group-hover:fill-emerald-100 transition-colors duration-500"/>
+      <rect x="20" y="26" width="16" height="28" rx="4" fill="#A7F3D0"/>
+      <rect x="32" y="20" width="16" height="40" rx="4" fill="#6EE7B7"/>
+      <rect x="44" y="30" width="16" height="24" rx="4" fill="#34D399"/>
+      <path d="M28 36l4 4 8-8" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+    </svg>
+  ),
+  trend: (
+    <svg width="40" height="40" viewBox="0 0 80 80" fill="none" className="group-hover:scale-110 group-hover:-translate-y-0.5 transition-all duration-500">
+      <circle cx="40" cy="40" r="28" fill="#F5F3FF" className="group-hover:fill-violet-100 transition-colors duration-500"/>
+      <path d="M20 56 L32 42 L44 48 L60 24" stroke="#8B5CF6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      <circle cx="60" cy="24" r="4" fill="#8B5CF6"/>
+      <path d="M52 24h8v8" stroke="#8B5CF6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+    </svg>
+  ),
+  lens: (
+    <svg width="40" height="40" viewBox="0 0 80 80" fill="none" className="group-hover:scale-110 group-hover:rotate-12 transition-all duration-500">
+      <circle cx="40" cy="40" r="28" fill="#FFF1F2" className="group-hover:fill-rose-100 transition-colors duration-500"/>
+      <circle cx="36" cy="36" r="14" stroke="#FB7185" strokeWidth="3" fill="#FECDD3"/>
+      <line x1="46" y1="46" x2="58" y2="58" stroke="#FB7185" strokeWidth="3" strokeLinecap="round"/>
+      <circle cx="33" cy="33" r="4" fill="#fff" opacity="0.6"/>
+    </svg>
+  ),
+  voice: (
+    <svg width="40" height="40" viewBox="0 0 80 80" fill="none" className="group-hover:scale-110 transition-transform duration-500">
+      <circle cx="40" cy="40" r="28" fill="#ECFEFF" className="group-hover:fill-sky-100 transition-colors duration-500"/>
+      <rect x="34" y="18" width="12" height="28" rx="6" fill="#7DD3FC"/>
+      <path d="M26 38v4a14 14 0 0028 0v-4" stroke="#0EA5E9" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+      <line x1="40" y1="56" x2="40" y2="64" stroke="#0EA5E9" strokeWidth="2.5" strokeLinecap="round"/>
+      {/* Sound waves — animate */}
+      <path d="M54 32a8 8 0 010 12" stroke="#38BDF8" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.5" className="group-hover:opacity-100 transition-opacity duration-500"/>
+      <path d="M58 28a14 14 0 010 20" stroke="#38BDF8" strokeWidth="2" strokeLinecap="round" fill="none" opacity="0.3" className="group-hover:opacity-70 transition-opacity duration-500"/>
+    </svg>
+  ),
+};
+
 const FEATURES = [
-  {
-    title: 'Sees what you\'re working on',
-    copy: 'Understands your screen and gives suggestions based on what you\'re actually doing.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="1.5">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-      </svg>
-    ),
-    span: 'col-span-1 md:col-span-1',
-    accent: 'from-indigo-50 to-blue-50',
-    border: 'border-indigo-100/60',
-  },
-  {
-    title: 'One shortcut. Instant clarity.',
-    copy: 'Press \u2318K anywhere to get clear options without breaking your flow.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="1.5">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-      </svg>
-    ),
-    span: 'col-span-1 md:col-span-1',
-    accent: 'from-amber-50 to-orange-50',
-    border: 'border-amber-100/60',
-  },
-  {
-    title: 'Not answers. Better choices.',
-    copy: 'Get Safe, Smart, and Bold options so you can choose what actually fits.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="1.5">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-      </svg>
-    ),
-    span: 'col-span-1 md:col-span-1',
-    accent: 'from-emerald-50 to-teal-50',
-    border: 'border-emerald-100/60',
-  },
-  {
-    title: 'Learns how you decide',
-    copy: 'Gets better with every choice and aligns with how you think over time.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="1.5">
-        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
-      </svg>
-    ),
-    span: 'col-span-1 md:col-span-1',
-    accent: 'from-violet-50 to-purple-50',
-    border: 'border-violet-100/60',
-  },
-  {
-    title: 'See trade-offs and blind spots',
-    copy: 'Understand what you might miss before making a decision.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ec4899" strokeWidth="1.5">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-    ),
-    span: 'col-span-1 md:col-span-1',
-    accent: 'from-pink-50 to-rose-50',
-    border: 'border-pink-100/60',
-  },
-  {
-    title: 'Guides you step by step',
-    copy: 'Get voice-guided help while you work. No switching tabs, no guessing.',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="1.5">
-        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-        <line x1="12" y1="19" x2="12" y2="23"/>
-      </svg>
-    ),
-    span: 'col-span-1 md:col-span-1',
-    accent: 'from-sky-50 to-cyan-50',
-    border: 'border-sky-100/60',
-  },
+  { title: 'Sees what you\'re working on', copy: 'Understands your screen and gives suggestions based on what you\'re actually doing.', illustration: illustrations.eye },
+  { title: 'One shortcut. Instant clarity.', copy: 'Press \u2318K anywhere to get clear options without breaking your flow.', illustration: illustrations.bolt },
+  { title: 'Not answers. Better choices.', copy: 'Get Safe, Smart, and Bold options so you can choose what actually fits.', illustration: illustrations.check },
+  { title: 'Learns how you decide', copy: 'Gets better with every choice and aligns with how you think over time.', illustration: illustrations.trend },
+  { title: 'See trade-offs and blind spots', copy: 'Understand what you might miss before making a decision.', illustration: illustrations.lens },
+  { title: 'Guides you step by step', copy: 'Get voice-guided help while you work. No switching tabs, no guessing.', illustration: illustrations.voice },
 ];
 
-function FeatureCard({ title, copy, icon, accent, border }) {
+function FeatureCard({ title, copy, illustration }) {
   return (
-    <div
-      className={`group relative bg-gradient-to-br ${accent} border ${border} rounded-2xl p-6 
-                  transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/50`}
-      style={{ backdropFilter: 'blur(8px)' }}
+    <div className="group relative bg-white rounded-2xl p-6 border border-slate-100
+                    transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/40 hover:border-slate-200/80"
     >
-      <div className="mb-4 w-10 h-10 rounded-xl bg-white/80 border border-white shadow-sm flex items-center justify-center
-                      group-hover:scale-110 transition-transform duration-300">
-        {icon}
+      <div className="mb-4">
+        {illustration}
       </div>
       <h3 className="font-body text-[15px] font-semibold text-slate-800 mb-1.5 leading-snug">{title}</h3>
       <p className="font-body text-[13px] text-slate-500 leading-relaxed">{copy}</p>
@@ -96,7 +81,7 @@ function FeatureCard({ title, copy, icon, accent, border }) {
 
 function FeaturesSection() {
   return (
-    <section className="relative bg-white py-24 px-6 overflow-hidden" data-testid="features-section">
+    <section className="relative py-24 px-6 overflow-hidden" style={{ background: '#f8fafc' }} data-testid="features-section">
       {/* Ghibli art — one image per position with gradient fade */}
       {/* Top-right: clouds */}
       <div className="absolute top-0 right-0 w-[340px] h-[220px] pointer-events-none overflow-hidden">
@@ -132,9 +117,9 @@ function FeaturesSection() {
         </div>
 
         {/* Bento grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {FEATURES.map((f, i) => (
-            <FeatureCard key={i} {...f} />
+            <FeatureCard key={i} title={f.title} copy={f.copy} illustration={f.illustration} />
           ))}
         </div>
       </div>
