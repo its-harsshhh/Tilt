@@ -38,6 +38,44 @@ function captureFrame() {
   } catch (e) { return null; }
 }
 
+// Audio recording from main window context (PiP can't access getUserMedia)
+let activeMediaStream = null;
+let activeRecorder = null;
+
+function startMicRecording() {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      activeMediaStream = stream;
+      const chunks = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        activeMediaStream = null;
+        activeRecorder = null;
+        const blob = new Blob(chunks, { type: mimeType });
+        resolve(blob);
+      };
+      recorder.onerror = (e) => { reject(e); };
+      activeRecorder = recorder;
+      recorder.start();
+    } catch (e) { reject(e); }
+  });
+}
+
+function stopMicRecording() {
+  if (activeRecorder && activeRecorder.state === 'recording') {
+    activeRecorder.stop();
+  }
+}
+
+// Returns { start, stop } where start returns a Promise<Blob>
+function getMicFunctions() {
+  return { startMicRecording, stopMicRecording };
+}
+
 function collapsePip() {
   if (!pipWindowRef || pipWindowRef.closed) return;
   isCollapsed = true;
@@ -70,6 +108,7 @@ function renderPaletteInternal() {
       screenContext={currentScreenContext}
       onRequestClose={closeFloatingPalette}
       captureFrameFn={captureFrame}
+      micFns={getMicFunctions()}
       collapsed={isCollapsed}
       onCollapse={collapsePip}
       onExpand={expandPip}

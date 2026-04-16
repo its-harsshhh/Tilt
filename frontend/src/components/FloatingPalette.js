@@ -7,7 +7,7 @@ const TILT_ICON_SVG = `<svg width="738" height="482" viewBox="0 0 738 482" fill=
 
 const TILT_ICON_DATA_URI = 'data:image/svg+xml,' + encodeURIComponent(TILT_ICON_SVG);
 
-export default function FloatingPalette({ screenContext, captureFrameFn, collapsed, onCollapse, onExpand }) {
+export default function FloatingPalette({ screenContext, captureFrameFn, micFns, collapsed, onCollapse, onExpand }) {
   if (collapsed) {
     return (
       <div data-testid="floating-palette-collapsed" onClick={onExpand} style={{
@@ -23,11 +23,12 @@ export default function FloatingPalette({ screenContext, captureFrameFn, collaps
   return <FloatingPaletteExpanded
     screenContext={screenContext}
     captureFrameFn={captureFrameFn}
+    micFns={micFns}
     onCollapse={onCollapse}
   />;
 }
 
-function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) {
+function FloatingPaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) {
   const [input, setInput] = useState('');
   const [tiltMessages, setTiltMessages] = useState([]);
   const [decideMessages, setDecideMessages] = useState([]);
@@ -312,49 +313,75 @@ function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) 
     }
   };
 
-  // Voice recording
+  // Voice recording — uses micFns from main window (PiP can't access getUserMedia)
+  const recordingPromiseRef = useRef(null);
+
   const startRecording = useCallback(async () => {
+    if (!micFns) {
+      // Fallback: try direct access (works in main window / non-PiP)
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+        const recorder = new MediaRecorder(stream, { mimeType });
+        audioChunksRef.current = [];
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+        recorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(audioChunksRef.current, { type: mimeType });
+          await processAudioBlob(blob);
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        setRecording(true);
+      } catch (err) {
+        setError('Microphone access denied');
+      }
+      return;
+    }
+
+    // Use main window mic functions
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        if (blob.size < 1000) { setError('Recording too short'); return; }
-        setTranscribing(true);
-        try {
-          const form = new FormData();
-          form.append('file', blob, 'voice.webm');
-          const res = await fetch(`${API_URL}/api/transcribe`, { method: 'POST', body: form });
-          if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Transcription failed'); }
-          const data = await res.json();
-          if (data.text && data.text.trim()) {
-            setInput(data.text.trim());
-            // Auto-submit after a brief moment so user sees the text
-            setTimeout(() => {
-              if (mode === 'decide') sendDecide(data.text.trim());
-              else sendTilt(data.text.trim());
-            }, 300);
-          }
-        } catch (err) { setError(err.message); }
-        finally { setTranscribing(false); }
-      };
-      mediaRecorderRef.current = recorder;
-      recorder.start();
       setRecording(true);
+      recordingPromiseRef.current = micFns.startMicRecording();
     } catch (err) {
       setError('Microphone access denied');
+      setRecording(false);
     }
-  }, [mode, sendTilt, sendDecide]);
+  }, [micFns]);
 
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+  const stopRecording = useCallback(async () => {
+    setRecording(false);
+    if (micFns) {
+      micFns.stopMicRecording();
+      try {
+        const blob = await recordingPromiseRef.current;
+        if (blob) await processAudioBlob(blob);
+      } catch (e) { setError('Recording failed'); }
+    } else if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
-    setRecording(false);
-  }, []);
+  }, [micFns]);
+
+  const processAudioBlob = useCallback(async (blob) => {
+    if (blob.size < 500) { setError('Recording too short'); return; }
+    setTranscribing(true);
+    try {
+      const form = new FormData();
+      const ext = blob.type.includes('webm') ? 'webm' : 'mp4';
+      form.append('file', blob, `voice.${ext}`);
+      const res = await fetch(`${API_URL}/api/transcribe`, { method: 'POST', body: form });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Transcription failed'); }
+      const data = await res.json();
+      if (data.text && data.text.trim()) {
+        setInput(data.text.trim());
+        setTimeout(() => {
+          if (mode === 'decide') sendDecide(data.text.trim());
+          else sendTilt(data.text.trim());
+        }, 300);
+      }
+    } catch (err) { setError(err.message); }
+    finally { setTranscribing(false); }
+  }, [mode, sendTilt, sendDecide]);
 
   const toggleRecording = useCallback(() => {
     if (recording) stopRecording();
