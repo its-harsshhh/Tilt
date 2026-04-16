@@ -1,0 +1,73 @@
+{
+  "project_name": "Tilt",
+  "domain": "AI Decision Layer",
+  "theme": "dark",
+  "archetype": "5 (Jewel & Luxury) - Modified for Premium System UI",
+  "colors": {
+    "background": "#050505",
+    "foreground": "#FFFFFF",
+    "glass_panel": "rgba(5, 5, 5, 0.6)",
+    "border_subtle": "rgba(255, 255, 255, 0.1)",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "text_mono": "#71717A",
+    "accent_safe": "#27272A",
+    "accent_smart": "#FFFFFF",
+    "accent_bold": "#FACC15"
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Outfit, sans-serif",
+      "body": "Satoshi, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "scales": {
+      "h1": "text-5xl md:text-6xl font-light tracking-tighter leading-tight",
+      "h2": "text-3xl md:text-4xl font-light tracking-tight",
+      "body": "text-base font-normal leading-relaxed",
+      "mono": "text-xs font-mono tracking-widest uppercase"
+    }
+  },
+  "surfaces": {
+    "glassmorphism": "bg-black/60 backdrop-blur-2xl backdrop-saturate-150 border border-white/10 shadow-[0_32px_64px_rgba(0,0,0,0.5)]",
+    "card_safe": "bg-zinc-900/50 border border-white/5 text-zinc-300 hover:bg-zinc-800 transition-all cursor-pointer rounded-xl p-6",
+    "card_smart": "bg-white/5 border border-white/20 text-white hover:bg-white/10 transition-all cursor-pointer rounded-xl p-6 shadow-lg",
+    "card_bold": "bg-zinc-100 text-black hover:bg-white transition-all cursor-pointer rounded-xl p-6 font-medium shadow-[0_0_20px_rgba(255,255,255,0.15)]",
+    "input_massive": "bg-transparent border-none text-3xl md:text-5xl font-light text-white placeholder-zinc-700 focus:outline-none focus:ring-0 w-full"
+  },
+  "layout_spacing": {
+    "bento_grid": "grid grid-cols-1 md:grid-cols-3 gap-6",
+    "generous_padding": "p-8 md:p-12",
+    "screen_share_container": "relative w-full h-screen overflow-hidden bg-black flex items-center justify-center"
+  },
+  "media": {
+    "landing_bg": {
+      "url": "https://images.unsplash.com/photo-1659040456574-8c10cadc1dd8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxkYXJrJTIwYWJzdHJhY3QlMjBncmFkaWVudCUyMG1pbmltYWx8ZW58MHx8fHwxNzc2MzQwNjU5fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Abstract dark minimal background for the landing page",
+      "category": "background"
+    }
+  },
+  "animations": {
+    "enter": "transition-all duration-300 ease-out",
+    "cmd_k_modal": "animate-in fade-in zoom-in-95 duration-200",
+    "pulse_record": "animate-pulse"
+  },
+  "icons_library": "lucide-react",
+  "instructions_to_main_agent": [
+    "0. Import Outfit, Satoshi, and JetBrains Mono fonts via Google Fonts or standard imports.",
+    "1. Build the Landing Page: Use the `landing_bg` image with an overlay (`bg-black/60`). Center a massive headline 'Decide better. Not faster.' using `Outfit` font. Add a premium glassmorphic button to 'Connect Screen & Start'.",
+    "2. Screen Share Flow: Use `navigator.mediaDevices.getDisplayMedia` to prompt screen sharing. When active, display the video stream filling the background, completely replacing the landing page.",
+    "3. Context Capture: Implement a simulated loop (`setInterval`) every 5-10 seconds. Show a subtle 'capturing context...' indicator (e.g., a glowing red dot and mono text) floating in a corner.",
+    "4. Command Palette (Cmd+K): Listen for Cmd+K/Ctrl+K globally. Open a centered modal taking up generous space (`w-full max-w-3xl`). Use Shadcn Dialog heavily customized to remove standard padding and borders.",
+    "5. Command Palette UI: Apply the `glassmorphism` surface rule (`bg-black/60 backdrop-blur-2xl border-white/10`). The input must be massive, borderless, taking focus immediately.",
+    "6. Reflection Layer & Memory: Once user submits a query, show a 'thinking/reflecting' state with monospace typography. Implement localStorage memory wrapper to mock the Adaptation/Memory system. Save basic queries and return them.",
+    "7. Decision Engine Options: Reveal the 3 options (Safe, Smart, Bold) using a 3-column bento grid. Each uses its respective card surface style (`card_safe`, `card_smart`, `card_bold`).",
+    "8. Output View: Selecting an option shows a detailed reasoning view inside the palette with a 'Copy to Clipboard' action.",
+    "9. CRITICAL: Include `data-testid` on ALL interactive elements (inputs, buttons, decision cards, copy buttons, screen share toggles).",
+    "10. Do not implement a chat interface. It must function like a spotlight command palette."
+  ],
+  "accessibility": {
+    "focus": "focus:ring-2 focus:ring-white/20 focus:outline-none",
+    "contrast_check": "Verified safe contrast on text against #050505 and glassmorphism backgrounds."
+  }
+}
