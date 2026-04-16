@@ -81,26 +81,11 @@ function FeatureCard({ title, copy, illustration }) {
 
 function FeaturesSection() {
   return (
-    <section className="relative py-24 px-6 overflow-hidden" style={{ background: '#f8fafc' }} data-testid="features-section">
-      {/* Ghibli art — one image per position with gradient fade */}
-      {/* Top-right: clouds */}
-      <div className="absolute top-0 right-0 w-[340px] h-[220px] pointer-events-none overflow-hidden">
-        <img src="/ghibli-clouds.jpg" alt="" className="w-full h-full object-cover object-center" style={{ opacity: 0.12 }} />
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white" />
-      </div>
-      {/* Left-center: summer scene */}
-      <div className="absolute top-1/2 -translate-y-1/2 -left-8 w-[260px] h-[200px] pointer-events-none overflow-hidden">
-        <img src="/ghibli-summer.jpg" alt="" className="w-full h-full object-cover object-right" style={{ opacity: 0.1 }} />
-        <div className="absolute inset-0 bg-gradient-to-l from-white via-white/40 to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-white/80" />
-      </div>
-      {/* Bottom-right: mountain */}
-      <div className="absolute bottom-0 right-0 w-[320px] h-[200px] pointer-events-none overflow-hidden">
-        <img src="/ghibli-mountain.jpg" alt="" className="w-full h-full object-cover object-top" style={{ opacity: 0.1 }} />
-        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-white/50 to-white" />
-        <div className="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-white" />
-      </div>
+    <section className="relative py-28 px-6 overflow-hidden bg-white" data-testid="features-section">
+      {/* Clean subtle gradient bg — no images */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: 'radial-gradient(circle at 20% 20%, rgba(238,242,255,0.5) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(236,254,255,0.4) 0%, transparent 50%)',
+      }} />
 
       <div className="max-w-5xl mx-auto relative z-10">
         {/* Section header */}
