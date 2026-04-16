@@ -35,8 +35,7 @@ export default function LandingPage({ onStartScreenShare }) {
           }}
           data-testid="landing-headline"
         >
-          Decide better.<br />
-          <span style={{ color: '#475569' }}>Not faster.</span>
+          Decide better, together.
         </h1>
 
         {/* Subheading — WCAG AA: slate-600 = #475569, 7:1 on white */}
