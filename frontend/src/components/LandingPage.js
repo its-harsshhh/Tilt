@@ -39,8 +39,8 @@ export default function LandingPage({ onStartScreenShare }) {
           <span style={{ color: '#475569' }}>Not faster.</span>
         </h1>
 
-        {/* Subheading */}
-        <p className="font-body text-base md:text-lg text-slate-500 max-w-lg text-center mb-9 leading-relaxed">
+        {/* Subheading — WCAG AA: slate-600 = #475569, 7:1 on white */}
+        <p className="font-body text-base md:text-lg text-slate-600 max-w-lg text-center mb-9 leading-relaxed">
           AI that understands what you're doing and helps you choose — without taking over.
         </p>
 
@@ -55,15 +55,15 @@ export default function LandingPage({ onStartScreenShare }) {
           Start Decision Layer
         </button>
 
-        {/* Hint */}
+        {/* Hint — WCAG AA compliant */}
         <div className="mt-7 flex flex-col items-center gap-2">
-          <p className="font-body text-[13px] text-slate-400 leading-relaxed">
+          <p className="font-body text-[13px] text-slate-600 leading-relaxed">
             Share your screen once. Call it anytime with{' '}
-            <kbd className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[10px] text-slate-500">
+            <kbd className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[10px] text-slate-700">
               <Command size={9} className="inline" />K
             </kbd>
           </p>
-          <p className="font-body text-[11px] text-slate-300">
+          <p className="font-body text-[11px] text-slate-500">
             One shortcut. Better decisions everywhere.
           </p>
         </div>
