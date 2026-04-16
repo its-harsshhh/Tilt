@@ -15,8 +15,9 @@ export default function LandingPage({ onStartScreenShare }) {
           className="w-full h-full object-cover"
           style={{ objectPosition: '50% 35%' }}
         />
-        {/* White gradient fade from bottom */}
+        {/* White gradient fade from bottom + slight from top for navbar */}
         <div className="absolute inset-0 bg-gradient-to-t from-white from-[20%] via-white/50 via-[45%] to-transparent to-[70%]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/50 via-transparent via-[12%] to-transparent" />
       </div>
 
       {/* Top-left logo */}
