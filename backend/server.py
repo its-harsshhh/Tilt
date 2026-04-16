@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
-from emergentintegrations.llm.openai import OpenAISpeechToText
+from emergentintegrations.llm.openai import OpenAISpeechToText, OpenAITextToSpeech
 
 app = FastAPI(title="Tilt API")
 
@@ -122,6 +122,33 @@ async def transcribe_audio(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
+
+
+class SpeakRequest(BaseModel):
+    text: str
+    voice: Optional[str] = "nova"
+
+
+@app.post("/api/speak")
+async def speak_text(request: SpeakRequest):
+    if not EMERGENT_KEY:
+        raise HTTPException(status_code=500, detail="LLM key not configured")
+
+    if not request.text or not request.text.strip():
+        raise HTTPException(status_code=400, detail="No text provided")
+
+    try:
+        tts = OpenAITextToSpeech(api_key=EMERGENT_KEY)
+        audio_b64 = await tts.generate_speech_base64(
+            text=request.text.strip()[:4096],
+            model="tts-1",
+            voice=request.voice or "nova",
+            speed=1.1,
+        )
+        return {"audio_base64": audio_b64, "status": "ok"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Speech generation failed: {str(e)}")
 
 
 @app.post("/api/analyze-screen")

@@ -45,16 +45,52 @@ function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) 
   const [annotatedImage, setAnnotatedImage] = useState(null);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const guideIntervalRef = useRef(null);
   const inputRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const audioRef = useRef(null);
+  const lastSpokenRef = useRef('');
 
   // Active messages based on mode
   const messages = mode === 'tilt' ? tiltMessages : decideMessages;
   const setMessages = mode === 'tilt' ? setTiltMessages : setDecideMessages;
   const scrollRef = useRef(null);
-  const submittingRef = useRef(false); // prevent double submit
+  const submittingRef = useRef(false);
+
+  // Speak text aloud via TTS
+  const speakText = useCallback(async (text) => {
+    if (!voiceMode || !text || text === lastSpokenRef.current) return;
+    lastSpokenRef.current = text;
+    setSpeaking(true);
+    try {
+      const res = await fetch(`${API_URL}/api/speak`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: 'nova' }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.audio_base64) {
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        audioRef.current = audio;
+        audio.onended = () => setSpeaking(false);
+        audio.onerror = () => setSpeaking(false);
+        await audio.play();
+      }
+    } catch (e) { /* silent */ }
+    finally { setTimeout(() => setSpeaking(false), 100); }
+  }, [voiceMode]);
+
+  // Auto-speak guide instructions when they change
+  useEffect(() => {
+    if (voiceMode && guideResult && guideResult.instruction) {
+      speakText(guideResult.instruction);
+    }
+  }, [voiceMode, guideResult, speakText]);
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 200); }, []);
   useEffect(() => {
@@ -356,6 +392,26 @@ function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) 
                 }}>{t.label}</button>
             ))}
           </div>
+          {/* Voice mode toggle — only in Tilt mode */}
+          {mode === 'tilt' && (
+            <button onClick={() => { setVoiceMode(v => !v); if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } }}
+              data-testid="voice-mode-btn" title={voiceMode ? 'Voice mode ON' : 'Voice mode OFF'}
+              style={{
+                width: '28px', height: '28px', borderRadius: '8px', border: 'none',
+                background: voiceMode ? 'rgba(129,140,248,0.2)' : 'rgba(255,255,255,0.04)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                transition: 'all 0.2s',
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" strokeWidth="2"
+                stroke={voiceMode ? '#818cf8' : 'rgba(255,255,255,0.3)'}>
+                {voiceMode ? (
+                  <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></>
+                ) : (
+                  <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></>
+                )}
+              </svg>
+            </button>
+          )}
           {/* Collapse button */}
           {onCollapse && (
             <button onClick={onCollapse} data-testid="collapse-btn" title="Minimize (Cmd+K to reopen)"
@@ -411,6 +467,15 @@ function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) 
               <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>
                 {guideResult.is_complete ? 'Done!' : `Step ${guideStep}`}
               </span>
+              {voiceMode && (
+                <span style={{ fontSize: '9px', color: speaking ? '#818cf8' : 'rgba(129,140,248,0.4)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  </svg>
+                  {speaking ? 'Speaking...' : 'Voice on'}
+                </span>
+              )}
             </div>
             <button onClick={stopGuide} data-testid="guide-stop-btn" style={{
               background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
