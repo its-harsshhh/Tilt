@@ -6,11 +6,10 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 const TILT_ICON_SVG = `<svg width="738" height="482" viewBox="0 0 738 482" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M350.531 196.624L352.753 197.457C354.06 202.978 302.483 453.235 296.829 481.207L165.513 481.203L162.854 480.035C161.5 471.742 204.033 270.846 209.238 247.113C249.839 229.547 306.098 215.246 350.531 196.624Z" fill="white"/><path d="M737.508 0C672.666 35.4666 644.52 52.7052 572.998 80.8864C567.602 82.6882 558.684 85.9164 553.404 87.1426C518.816 101.993 462.272 119.645 426.196 130.248C371.896 146.207 309.881 163.299 253.959 176.005L248.565 177.22C239.517 181.258 180.231 194.961 168.271 197.86C112.084 211.361 55.9912 225.256 0 239.544L25.7739 105.836C83.2496 99.5242 155.99 85.3555 215.305 76.6787L421.234 44.6443C456.568 39.1878 498.244 31.9869 533.281 28.2369C542.046 25.7658 567.113 22.7049 577.236 21.2403L590.026 19.3714C619.875 15.0433 649.758 10.9463 679.671 7.08083C698.019 4.75801 719.844 2.95118 737.508 0Z" fill="url(#g1)"/><defs><linearGradient id="g1" x1="0" y1="222" x2="738" y2="0" gradientUnits="userSpaceOnUse"><stop stop-color="#2DB7DB"/><stop offset="0.49" stop-color="#3D29A9"/><stop offset="1" stop-color="#E82692"/></linearGradient></defs></svg>`;
 const TILT_ICON_DATA_URI = 'data:image/svg+xml,' + encodeURIComponent(TILT_ICON_SVG);
 
-// Pill definitions
+// Pill definitions — max 5 per section, keep cognitive load low
 const TILT_PILLS = [
   "Summarize what I'm looking at",
   "What should I do next?",
-  "Is this a good decision?",
   "Improve this message",
   "Spot issues here",
   "Give a better option",
@@ -22,7 +21,6 @@ const DECIDE_PILLS = [
   "Say this more clearly",
   "Handle this politely",
   "What should I do here?",
-  "Rewrite this better",
 ];
 
 const CONTEXT_PILLS = [
@@ -30,7 +28,6 @@ const CONTEXT_PILLS = [
   "What am I missing?",
   "Make it shorter",
   "Make it more direct",
-  "Explain why",
   "Alternative approach",
 ];
 
@@ -314,15 +311,16 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
     else sendTilt(input);
   }, [input, mode, sendTilt, sendDecide, guideActive, stopGuide]);
 
+  // Pills fill input — never auto-send. User stays in control.
   const handlePillSelect = useCallback((pill) => {
-    if (mode === 'tilt') { setInput(pill); setTimeout(() => sendTilt(pill), 50); }
-    else { setInput(pill); setTimeout(() => sendDecide(pill), 50); }
-  }, [mode, sendTilt, sendDecide]);
+    setInput(pill);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
 
   const handleTiltPillThenDecide = useCallback((pill) => {
     setMode('decide'); setInput(pill);
-    setTimeout(() => sendDecide(pill), 50);
-  }, [sendDecide]);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
 
   // Voice
   const startRecording = useCallback(async () => {
