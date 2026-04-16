@@ -97,18 +97,24 @@ function FeatureCard({ title, copy, icon, accent, border }) {
 function FeaturesSection() {
   return (
     <section className="relative bg-white py-24 px-6 overflow-hidden" data-testid="features-section">
-      {/* Ghibli art decorations — corners */}
-      <div className="absolute -top-4 -left-4 w-48 h-48 opacity-[0.08] pointer-events-none rounded-br-[40px] overflow-hidden">
-        <img src="/ghibli-clouds.jpg" alt="" className="w-full h-full object-cover" />
+      {/* Ghibli art — one image per position with gradient fade */}
+      {/* Top-right: clouds */}
+      <div className="absolute top-0 right-0 w-[340px] h-[220px] pointer-events-none overflow-hidden">
+        <img src="/ghibli-clouds.jpg" alt="" className="w-full h-full object-cover object-center" style={{ opacity: 0.12 }} />
+        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-white" />
       </div>
-      <div className="absolute -top-4 -right-4 w-44 h-36 opacity-[0.07] pointer-events-none rounded-bl-[40px] overflow-hidden">
-        <img src="/ghibli-summer.jpg" alt="" className="w-full h-full object-cover" />
+      {/* Left-center: summer scene */}
+      <div className="absolute top-1/2 -translate-y-1/2 -left-8 w-[260px] h-[200px] pointer-events-none overflow-hidden">
+        <img src="/ghibli-summer.jpg" alt="" className="w-full h-full object-cover object-right" style={{ opacity: 0.1 }} />
+        <div className="absolute inset-0 bg-gradient-to-l from-white via-white/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-white/80" />
       </div>
-      <div className="absolute -bottom-4 -left-4 w-52 h-40 opacity-[0.06] pointer-events-none rounded-tr-[40px] overflow-hidden">
-        <img src="/ghibli-mountain.jpg" alt="" className="w-full h-full object-cover" />
-      </div>
-      <div className="absolute -bottom-4 -right-4 w-40 h-40 opacity-[0.08] pointer-events-none rounded-tl-[40px] overflow-hidden">
-        <img src="/ghibli-clouds.jpg" alt="" className="w-full h-full object-cover" style={{ objectPosition: 'right bottom' }} />
+      {/* Bottom-right: mountain */}
+      <div className="absolute bottom-0 right-0 w-[320px] h-[200px] pointer-events-none overflow-hidden">
+        <img src="/ghibli-mountain.jpg" alt="" className="w-full h-full object-cover object-top" style={{ opacity: 0.1 }} />
+        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-white/50 to-white" />
+        <div className="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-white" />
       </div>
 
       <div className="max-w-3xl mx-auto relative z-10">
@@ -130,33 +136,6 @@ function FeaturesSection() {
           {FEATURES.map((f, i) => (
             <FeatureCard key={i} {...f} />
           ))}
-        </div>
-
-        {/* How it works — 3 steps */}
-        <div className="mt-20 text-center">
-          <p className="font-body text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-8">How it works</p>
-          <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-3">
-            {[
-              { step: '1', label: 'Share your screen', sub: 'One click to start' },
-              { step: '2', label: 'Press \u2318K', sub: 'Opens anywhere, instantly' },
-              { step: '3', label: 'Choose what works', sub: 'Safe, Smart, or Bold' },
-            ].map((s, i) => (
-              <React.Fragment key={i}>
-                <div className="flex items-center gap-3 md:flex-col md:gap-2 md:text-center">
-                  <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center flex-shrink-0">
-                    <span className="font-mono text-[13px] font-semibold text-slate-500">{s.step}</span>
-                  </div>
-                  <div>
-                    <p className="font-body text-[14px] font-medium text-slate-700">{s.label}</p>
-                    <p className="font-body text-[11px] text-slate-400">{s.sub}</p>
-                  </div>
-                </div>
-                {i < 2 && (
-                  <div className="hidden md:block w-12 h-px bg-slate-200" />
-                )}
-              </React.Fragment>
-            ))}
-          </div>
         </div>
       </div>
     </section>
