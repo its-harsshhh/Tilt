@@ -1,60 +1,41 @@
-# Tilt — AI Decision Layer PRD
+# Tilt — AI Screen Assistant PRD
 
 ## Original Problem Statement
-Build "Tilt" — a browser-based AI decision layer that observes user context via screen sharing and helps users make better decisions in real-time. Not a chatbot — a decision system. Single-page, keyboard-first, minimal, fast.
+Build "Tilt" — a browser-based AI that sees your screen and helps you get things done. Two modes: Tilt (unified chat + step-by-step guidance with voice) and Decide (Safe/Smart/Bold options). Full voice I/O.
 
 ## Architecture
-- **Frontend**: React 18 + Tailwind CSS (Outfit/Satoshi/JetBrains Mono fonts)
-- **Backend**: FastAPI (Python) with Claude Sonnet 4.5 via Emergent LLM key
-- **State**: localStorage for memory/adaptation (no auth, no DB needed for user data)
-- **Screen Sharing**: `navigator.mediaDevices.getDisplayMedia` with periodic captures every 7s
-- **Floating Palette**: Document Picture-in-Picture API for cross-tab decision palette
-
-## User Personas
-- Professionals composing important messages/replies
-- Anyone needing structured decision options for communication
-
-## Core Requirements
-1. Landing page with dark premium aesthetic
-2. Screen sharing flow with context capture
-3. **Floating PiP palette** that works on any tab/window (Cmd+K or click)
-4. Decision engine: Safe / Smart / Bold options
-5. Output view with copy + reasoning
-6. Memory layer tracking preferences
-7. Adaptation system pre-selecting preferred style
+- **Frontend**: React 18 + Tailwind CSS
+- **Backend**: FastAPI + Claude Sonnet 4.5 + OpenAI Whisper + OpenAI TTS via Emergent LLM key
+- **State**: localStorage (no auth, no DB)
+- **Screen Sharing**: getDisplayMedia with captures every 10s
+- **Vision**: Claude Sonnet 4.5 vision for analysis + guidance
+- **Voice Input**: OpenAI Whisper (whisper-1) for speech-to-text
+- **Voice Output**: OpenAI TTS (tts-1, nova voice) for spoken instructions
+- **Floating Palette**: Document PiP API, collapsible to icon
 
 ## What's Been Implemented (Apr 16, 2026)
-- [x] Full landing page with Tilt branding, headline, CTA
-- [x] Screen sharing via getDisplayMedia with animated border overlay
-- [x] Periodic screen capture every 7 seconds with context labels
-- [x] **Document Picture-in-Picture floating palette** — works on ANY tab
-- [x] Floating palette auto-opens when screen sharing starts
-- [x] Cmd+K within PiP window focuses the input
-- [x] Fallback in-tab CommandPalette for browsers without PiP support
-- [x] Decision engine using Claude Sonnet 4.5 (GPT-5.2 fallback)
-- [x] 3-option decision UI (Safe/Smart/Bold) 
-- [x] Output view with copy-to-clipboard and reasoning
-- [x] localStorage memory system tracking preferences
-- [x] Adaptation: pre-highlights preferred style, biases prompts
-- [x] Reflection layer showing "You usually prefer: X" insight
-- [x] All interactive elements have data-testid attributes
+- [x] Landing page with Ghibli aesthetic
+- [x] Screen sharing with animated border
+- [x] Real AI vision screen analysis every 10s
+- [x] **2 modes: Tilt / Decide** (separate message histories)
+- [x] **Tilt mode** — auto-detects chat vs step-by-step guidance
+- [x] **Decide mode** — Safe/Smart/Bold options
+- [x] **Voice input** — mic button, Whisper transcription, auto-send
+- [x] **Voice mode (TTS)** — toggle in Tilt tab, speaks guide instructions aloud
+  - Auto-speaks each new guide step
+  - Works when palette is minimized — hands-free guidance
+  - "Speaking..." indicator in guide header
+- [x] **Collapsible palette** — minimize to icon, Cmd+K to expand
+- [x] Continuous conversation, keyboard nav, memory/adaptation/reflection
 
-## Bug Fix Log
-- **Apr 16, 2026**: Fixed Cmd+K not working on shared tab. Root cause: keyboard listeners only work in the Tilt tab. Solution: Document Picture-in-Picture API creates a floating window on top of all windows. User can now use the palette from any tab/window.
+## Key API Endpoints
+- `GET /api/health`
+- `POST /api/tilt` — Unified chat + guide
+- `POST /api/transcribe` — Whisper STT (audio upload)
+- `POST /api/speak` — TTS (text → audio base64, nova voice)
+- `POST /api/analyze-screen` — Vision analysis
+- `POST /api/generate-decisions` — Safe/Smart/Bold
 
-## Prioritized Backlog
-### P0 (Critical) — None
-
-### P1 (High)
-- Real screen OCR/vision for context extraction (currently simulated)
-- Decision history view/recall
-
-### P2 (Nice to have)
-- Export decision history
-- Sound/haptic feedback on selection
-- Custom tone profiles
-
-## Next Tasks
-- User testing and feedback collection
-- Enhance context capture with actual screen content analysis
-- Add decision history sidebar
+## Backlog
+### P1 - Drag-to-paste
+### P2 - Decision history sidebar, Custom tone profiles

@@ -60,30 +60,33 @@ export default function App() {
     closeFloatingPalette();
   }, [screenStream]);
 
-  // Update PiP palette context periodically
+  // Update PiP palette context — only on meaningful changes, not too frequently
+  const lastContextRef = useRef('');
   useEffect(() => {
     if (!isSharing) return;
     const interval = setInterval(() => {
       if (isPipOpen()) {
-        renderPalette(captureContextRef.current);
+        const newCtx = captureContextRef.current;
+        // Only re-render if context changed significantly
+        if (newCtx !== lastContextRef.current) {
+          lastContextRef.current = newCtx;
+          renderPalette(newCtx);
+        }
       }
-    }, 8000);
+    }, 12000); // Less frequent to avoid disruption
     return () => clearInterval(interval);
   }, [isSharing]);
 
-  // Cmd+K: open floating palette if PiP supported, else open in-tab palette
+  // Cmd+K: open/expand floating palette if PiP supported, else toggle in-tab palette
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         if (isSharing) {
           if (pipSupported) {
-            // Try to open or focus the floating palette
-            if (!isPipOpen()) {
-              openFloatingPalette(captureContextRef.current);
-            }
+            // Open or expand the floating palette
+            openFloatingPalette(captureContextRef.current);
           } else {
-            // Fallback: in-tab palette
             setPaletteOpen((prev) => !prev);
           }
         }

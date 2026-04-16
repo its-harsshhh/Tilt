@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 class TiltAPITester:
-    def __init__(self, base_url="https://ae5551f5-e6f1-49af-94e3-5740a2c3ca71.preview.emergentagent.com"):
+    def __init__(self, base_url="https://tilt-decide.preview.emergentagent.com"):
         self.base_url = base_url
         self.tests_run = 0
         self.tests_passed = 0

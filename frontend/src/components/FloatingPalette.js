@@ -1,26 +1,270 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { getPreferredStyle, getInsightText, getMemory, saveDecision } from '../hooks/useMemory';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const LOGO_URL = window.location.origin + '/tilt-logo.svg';
 
-export default function FloatingPalette({ screenContext }) {
+const TILT_ICON_SVG = `<svg width="738" height="482" viewBox="0 0 738 482" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M350.531 196.624L352.753 197.457C354.06 202.978 302.483 453.235 296.829 481.207L165.513 481.203L162.854 480.035C161.5 471.742 204.033 270.846 209.238 247.113C249.839 229.547 306.098 215.246 350.531 196.624Z" fill="white"/><path d="M737.508 0C672.666 35.4666 644.52 52.7052 572.998 80.8864C567.602 82.6882 558.684 85.9164 553.404 87.1426C518.816 101.993 462.272 119.645 426.196 130.248C371.896 146.207 309.881 163.299 253.959 176.005L248.565 177.22C239.517 181.258 180.231 194.961 168.271 197.86C112.084 211.361 55.9912 225.256 0 239.544L25.7739 105.836C83.2496 99.5242 155.99 85.3555 215.305 76.6787L421.234 44.6443C456.568 39.1878 498.244 31.9869 533.281 28.2369C542.046 25.7658 567.113 22.7049 577.236 21.2403L590.026 19.3714C619.875 15.0433 649.758 10.9463 679.671 7.08083C698.019 4.75801 719.844 2.95118 737.508 0Z" fill="url(#g1)"/><defs><linearGradient id="g1" x1="0" y1="222" x2="738" y2="0" gradientUnits="userSpaceOnUse"><stop stop-color="#2DB7DB"/><stop offset="0.49" stop-color="#3D29A9"/><stop offset="1" stop-color="#E82692"/></linearGradient></defs></svg>`;
+
+const TILT_ICON_DATA_URI = 'data:image/svg+xml,' + encodeURIComponent(TILT_ICON_SVG);
+
+export default function FloatingPalette({ screenContext, captureFrameFn, collapsed, onCollapse, onExpand }) {
+  if (collapsed) {
+    return (
+      <div data-testid="floating-palette-collapsed" onClick={onExpand} style={{
+        width: '100vw', height: '100vh',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(15,23,42,0.95)', cursor: 'pointer',
+      }}>
+        <img src={TILT_ICON_DATA_URI} alt="Tilt" style={{ width: '32px', height: 'auto', opacity: 0.9 }} />
+      </div>
+    );
+  }
+
+  return <FloatingPaletteExpanded
+    screenContext={screenContext}
+    captureFrameFn={captureFrameFn}
+    onCollapse={onCollapse}
+  />;
+}
+
+function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) {
   const [input, setInput] = useState('');
-  const [phase, setPhase] = useState('input');
-  const [decisions, setDecisions] = useState(null);
-  const [selectedType, setSelectedType] = useState(null);
+  const [tiltMessages, setTiltMessages] = useState([]);
+  const [decideMessages, setDecideMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [mode, setMode] = useState('tilt');
+  const [decisions, setDecisions] = useState(null);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const [copied, setCopied] = useState(null);
+  const [guideActive, setGuideActive] = useState(false);
+  const [guideTask, setGuideTask] = useState(null);
+  const [guideStep, setGuideStep] = useState(1);
+  const [guideSteps, setGuideSteps] = useState([]);
+  const [guideResult, setGuideResult] = useState(null);
+  const [annotatedImage, setAnnotatedImage] = useState(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const guideIntervalRef = useRef(null);
   const inputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const audioRef = useRef(null);
+  const lastSpokenRef = useRef('');
+
+  // Active messages based on mode
+  const messages = mode === 'tilt' ? tiltMessages : decideMessages;
+  const setMessages = mode === 'tilt' ? setTiltMessages : setDecideMessages;
+  const scrollRef = useRef(null);
+  const submittingRef = useRef(false);
+
+  // Speak text aloud via TTS
+  const speakText = useCallback(async (text) => {
+    if (!voiceMode || !text || text === lastSpokenRef.current) return;
+    lastSpokenRef.current = text;
+    setSpeaking(true);
+    try {
+      const res = await fetch(`${API_URL}/api/speak`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice: 'nova' }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.audio_base64) {
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        audioRef.current = audio;
+        audio.onended = () => setSpeaking(false);
+        audio.onerror = () => setSpeaking(false);
+        await audio.play();
+      }
+    } catch (e) { /* silent */ }
+    finally { setTimeout(() => setSpeaking(false), 100); }
+  }, [voiceMode]);
+
+  // Auto-speak guide instructions when they change
+  useEffect(() => {
+    if (voiceMode && guideResult && guideResult.instruction) {
+      speakText(guideResult.instruction);
+    }
+  }, [voiceMode, guideResult, speakText]);
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 200); }, []);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, loading, decisions, guideResult, annotatedImage]);
+  useEffect(() => {
+    return () => { if (guideIntervalRef.current) clearInterval(guideIntervalRef.current); };
+  }, []);
+
+  const handleCopy = useCallback(async (text, id) => {
+    try { await navigator.clipboard.writeText(text); } catch {
+      const el = document.createElement('textarea');
+      el.value = text; document.body.appendChild(el);
+      el.select(); document.execCommand('copy'); document.body.removeChild(el);
+    }
+    setCopied(id); setTimeout(() => setCopied(null), 2000);
+  }, []);
+
+  const captureFrame = useCallback(() => {
+    if (captureFrameFn) return captureFrameFn();
+    return null;
+  }, [captureFrameFn]);
+
+  // Smaller, more precise annotation
+  const drawAnnotation = useCallback((frameDataUrl, region) => {
+    if (!region) return;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const cx = region.x * img.width;
+      const cy = region.y * img.height;
+      // Thin crosshair lines
+      ctx.strokeStyle = 'rgba(129, 140, 248, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, img.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(img.width, cy); ctx.stroke();
+      ctx.setLineDash([]);
+      // Small precise ring
+      ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(129, 140, 248, 0.9)'; ctx.lineWidth = 2.5; ctx.stroke();
+      // Tiny center dot
+      ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#818cf8'; ctx.fill();
+      // Arrow pointing to it
+      const arrowLen = 30;
+      const ax = cx + 22; const ay = cy - 22;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(cx + 12, cy - 12);
+      ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 2; ctx.stroke();
+      // Label with background
+      if (region.label) {
+        ctx.font = '600 12px Inter, sans-serif';
+        const tw = ctx.measureText(region.label).width;
+        const lx = ax + 4; const ly = ay - 6;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.beginPath();
+        ctx.roundRect(lx - 4, ly - 12, tw + 8, 16, 4);
+        ctx.fill();
+        ctx.fillStyle = '#c7d2fe';
+        ctx.fillText(region.label, lx, ly);
+      }
+      setAnnotatedImage(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.src = frameDataUrl;
+  }, []);
+
+  // Unified Tilt send
+  const sendTilt = useCallback(async (text) => {
+    if (!text.trim() || submittingRef.current) return;
+    submittingRef.current = true;
+    const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
+    setTiltMessages(prev => [...prev, userMsg]);
+    setInput(''); setLoading(true); setError(null);
+
+    const memory = getMemory();
+    const preferred = getPreferredStyle();
+    const frame = captureFrame();
+    const conversation = tiltMessages.map(m => ({ role: m.role, content: m.content }));
+
+    try {
+      const res = await fetch(`${API_URL}/api/tilt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text.trim(),
+          image_base64: frame || null,
+          screen_context: screenContext || null,
+          conversation,
+          user_preference: preferred !== 'smart' ? preferred : null,
+          tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null,
+        }),
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
+      const data = await res.json();
+
+      if (data.type === 'guide') {
+        setGuideActive(true);
+        setGuideTask(text.trim());
+        setGuideStep(data.step_number || 1);
+        setGuideSteps([]);
+        setGuideResult(data);
+        if (frame) drawAnnotation(frame, data.region);
+        setTiltMessages(prev => [...prev, {
+          role: 'assistant', id: Date.now() + 1,
+          isGuide: true, guideData: data, guideImage: null,
+          content: data.instruction,
+        }]);
+        if (guideIntervalRef.current) clearInterval(guideIntervalRef.current);
+        guideIntervalRef.current = setInterval(() => {
+          autoAdvance(text.trim(), data, 1, []);
+        }, 6000);
+      } else {
+        setTiltMessages(prev => [...prev, { role: 'assistant', content: data.response, id: Date.now() + 1 }]);
+      }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); submittingRef.current = false; setTimeout(() => inputRef.current?.focus(), 100); }
+  }, [tiltMessages, screenContext, captureFrame, drawAnnotation]);
+
+  // Auto-advance guide
+  const autoAdvance = useCallback(async (task, prevResult, prevStep, prevSteps) => {
+    const frame = captureFrame();
+    if (!frame) return;
+    const completedSteps = [...prevSteps];
+    if (prevResult?.step_summary) completedSteps.push(prevResult.step_summary);
+    try {
+      const res = await fetch(`${API_URL}/api/tilt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: task, image_base64: frame, guide_active: true, guide_task: task,
+          completed_steps: completedSteps, step_number: prevStep + 1,
+        }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.type === 'guide') {
+        setGuideResult(data);
+        setGuideStep(data.step_number || prevStep + 1);
+        setGuideSteps(completedSteps);
+        drawAnnotation(frame, data.region);
+        if (data.is_complete && guideIntervalRef.current) clearInterval(guideIntervalRef.current);
+      }
+    } catch (e) { /* silent */ }
+  }, [captureFrame, drawAnnotation]);
 
   useEffect(() => {
-    if (phase === 'input') setTimeout(() => inputRef.current?.focus(), 150);
-  }, [phase]);
+    if (guideActive && guideTask && guideResult && !guideResult.is_complete) {
+      if (guideIntervalRef.current) clearInterval(guideIntervalRef.current);
+      guideIntervalRef.current = setInterval(() => {
+        autoAdvance(guideTask, guideResult, guideStep, guideSteps);
+      }, 6000);
+    }
+    return () => {
+      if (guideIntervalRef.current && (!guideActive || guideResult?.is_complete))
+        clearInterval(guideIntervalRef.current);
+    };
+  }, [guideActive, guideTask, guideResult, guideStep, guideSteps, autoAdvance]);
 
-  const handleSubmit = async () => {
-    if (!input.trim()) return;
-    setPhase('loading');
-    setError(null);
+  const stopGuide = useCallback(() => {
+    setGuideActive(false); setGuideTask(null); setGuideResult(null);
+    setAnnotatedImage(null); setGuideStep(1); setGuideSteps([]);
+    if (guideIntervalRef.current) clearInterval(guideIntervalRef.current);
+  }, []);
+
+  // Decide mode
+  const sendDecide = useCallback(async (text) => {
+    if (!text.trim() || submittingRef.current) return;
+    submittingRef.current = true;
+    const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
+    setDecideMessages(prev => [...prev, userMsg]);
+    setInput(''); setLoading(true); setError(null); setDecisions(null); setActiveIdx(-1);
     const memory = getMemory();
     const preferred = getPreferredStyle();
     try {
@@ -28,262 +272,382 @@ export default function FloatingPalette({ screenContext }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input_text: input.trim(),
-          context: screenContext || null,
+          input_text: text.trim(), context: screenContext || null,
           user_preference: preferred !== 'smart' ? preferred : null,
           tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null,
         }),
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Failed to generate');
-      }
-      const data = await res.json();
-      setDecisions(data);
-      setPhase('decisions');
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
+      const data = await res.json(); setDecisions(data);
+      const types = ['safe', 'smart', 'bold'];
+      setActiveIdx(types.indexOf(preferred) >= 0 ? types.indexOf(preferred) : 1);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); submittingRef.current = false; }
+  }, [screenContext]);
+
+  const handleSelectDecision = useCallback((type) => {
+    if (!decisions) return;
+    saveDecision(type, decideMessages[decideMessages.length - 1]?.content || '', decisions[type]?.response);
+    setDecideMessages(prev => [...prev, {
+      role: 'assistant', content: decisions[type]?.response, id: Date.now(),
+      decisionType: type, reasoning: decisions?.reasoning?.[type],
+    }]);
+    setDecisions(null); setActiveIdx(-1);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, [decisions, decideMessages]);
+
+  const handleSubmit = useCallback(() => {
+    if (!input.trim() || submittingRef.current) return;
+    if (mode === 'decide') sendDecide(input);
+    else sendTilt(input);
+  }, [input, mode, sendTilt, sendDecide]);
+
+  // Only handle arrow keys + Enter for decisions at parent level
+  const handleKeyDown = (e) => {
+    if (decisions) {
+      const types = ['safe', 'smart', 'bold'];
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(prev => Math.min(prev + 1, 2)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(prev => Math.max(prev - 1, 0)); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (activeIdx >= 0) handleSelectDecision(types[activeIdx]); }
+    }
+  };
+
+  // Voice recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (blob.size < 1000) { setError('Recording too short'); return; }
+        setTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append('file', blob, 'voice.webm');
+          const res = await fetch(`${API_URL}/api/transcribe`, { method: 'POST', body: form });
+          if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Transcription failed'); }
+          const data = await res.json();
+          if (data.text && data.text.trim()) {
+            setInput(data.text.trim());
+            // Auto-submit after a brief moment so user sees the text
+            setTimeout(() => {
+              if (mode === 'decide') sendDecide(data.text.trim());
+              else sendTilt(data.text.trim());
+            }, 300);
+          }
+        } catch (err) { setError(err.message); }
+        finally { setTranscribing(false); }
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
     } catch (err) {
-      setError(err.message);
-      setPhase('input');
+      setError('Microphone access denied');
     }
-  };
+  }, [mode, sendTilt, sendDecide]);
 
-  const handleSelect = (type) => {
-    setSelectedType(type);
-    saveDecision(type, input, decisions[type]?.response);
-    setPhase('output');
-  };
-
-  const handleCopy = async () => {
-    const text = decisions?.[selectedType]?.response || '';
-    try { await navigator.clipboard.writeText(text); } catch {
-      const el = document.createElement('textarea');
-      el.value = text; document.body.appendChild(el);
-      el.select(); document.execCommand('copy'); document.body.removeChild(el);
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+    setRecording(false);
+  }, []);
 
-  const handleReset = () => {
-    setPhase('input'); setInput(''); setDecisions(null);
-    setSelectedType(null); setError(null); setCopied(false);
+  const toggleRecording = useCallback(() => {
+    if (recording) stopRecording();
+    else startRecording();
+  }, [recording, startRecording, stopRecording]);
+
+  const switchMode = (m) => {
+    if (m !== 'tilt' && guideActive) stopGuide();
+    setMode(m); setDecisions(null); setActiveIdx(-1);
   };
 
   const insight = getInsightText();
   const preferred = getPreferredStyle();
-
-  const cardStyles = {
-    safe:  { bg: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.06)', accent: '#94a3b8', tag: 'Safe' },
-    smart: { bg: 'rgba(255,255,255,0.07)', border: 'rgba(255,255,255,0.12)', accent: '#e2e8f0', tag: 'Smart' },
-    bold:  { bg: 'rgba(255,255,255,0.10)', border: 'rgba(255,255,255,0.15)', accent: '#fbbf24', tag: 'Bold' },
-  };
+  const hasCtx = screenContext && screenContext !== 'Observing...' && screenContext.length > 15;
+  const tagColors = { safe: '#94a3b8', smart: '#e2e8f0', bold: '#fbbf24' };
 
   return (
     <div data-testid="floating-palette" style={{
       fontFamily: "'Inter', -apple-system, sans-serif",
       background: 'linear-gradient(180deg, rgba(15,23,42,0.97) 0%, rgba(2,6,23,0.99) 100%)',
-      color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column',
-    }}>
-      {/* ── Spotlight Search Bar ── */}
-      <div style={{
-        padding: '16px 16px 0', position: 'sticky', top: 0, zIndex: 10,
-      }}>
-        <div style={{
-          background: 'linear-gradient(180deg, rgba(51,65,85,0.6) 0%, rgba(30,41,59,0.7) 100%)',
-          backdropFilter: 'blur(40px) saturate(1.4)',
-          WebkitBackdropFilter: 'blur(40px) saturate(1.4)',
-          border: '1px solid rgba(148,163,184,0.15)',
-          borderRadius: '14px',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 0 0.5px rgba(255,255,255,0.05) inset',
-          display: 'flex', alignItems: 'center', gap: '10px',
-          padding: '4px 6px 4px 16px',
-        }}>
-          {/* Search icon */}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.5)" strokeWidth="2" style={{ flexShrink: 0 }}>
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
+      color: '#fff', height: '100vh', display: 'flex', flexDirection: 'column',
+    }} onKeyDown={handleKeyDown} tabIndex={-1}>
 
-          {/* Input */}
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="What do you want to do here?"
-            data-testid="pip-decision-input"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); }
-            }}
-            style={{
-              flex: 1, background: 'transparent', border: 'none', outline: 'none',
-              color: '#f1f5f9', fontSize: '15px', fontFamily: "'Inter', sans-serif",
-              fontWeight: '400', padding: '10px 0', letterSpacing: '-0.01em',
-            }}
-          />
-
-          {/* Submit pill */}
-          {input.trim() && phase === 'input' && (
-            <button onClick={handleSubmit} data-testid="pip-submit-btn" style={{
-              background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '10px', padding: '6px 14px', cursor: 'pointer',
-              color: 'rgba(255,255,255,0.6)', fontSize: '12px', fontFamily: "'Inter', sans-serif",
-              fontWeight: '500', whiteSpace: 'nowrap', transition: 'all 0.15s',
-            }}>
-              Return ↵
+      {/* Top — tabs + collapse button */}
+      <div style={{ padding: '8px 12px 4px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '3px', flex: 1 }}>
+            {[{ key: 'tilt', label: 'Tilt' }, { key: 'decide', label: 'Decide' }].map(t => (
+              <button key={t.key} onClick={() => switchMode(t.key)} data-testid={`mode-${t.key}-btn`}
+                style={{
+                  flex: 1, padding: '6px 0', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                  background: mode === t.key ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  color: mode === t.key ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
+                  fontSize: '12px', fontWeight: '600', fontFamily: "'Inter', sans-serif",
+                }}>{t.label}</button>
+            ))}
+          </div>
+          {/* Voice mode toggle — only in Tilt mode */}
+          {mode === 'tilt' && (
+            <button onClick={() => { setVoiceMode(v => !v); if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } }}
+              data-testid="voice-mode-btn" title={voiceMode ? 'Voice mode ON' : 'Voice mode OFF'}
+              style={{
+                width: '28px', height: '28px', borderRadius: '8px', border: 'none',
+                background: voiceMode ? 'rgba(129,140,248,0.2)' : 'rgba(255,255,255,0.04)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                transition: 'all 0.2s',
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" strokeWidth="2"
+                stroke={voiceMode ? '#818cf8' : 'rgba(255,255,255,0.3)'}>
+                {voiceMode ? (
+                  <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></>
+                ) : (
+                  <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></>
+                )}
+              </svg>
             </button>
           )}
-
-          {phase === 'loading' && (
-            <div style={{
-              width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.08)',
-              borderTopColor: 'rgba(148,163,184,0.5)', borderRadius: '50%',
-              animation: 'spin 0.7s linear infinite', flexShrink: 0, marginRight: '8px',
-            }} />
+          {/* Collapse button */}
+          {onCollapse && (
+            <button onClick={onCollapse} data-testid="collapse-btn" title="Minimize (Cmd+K to reopen)"
+              style={{
+                width: '28px', height: '28px', borderRadius: '8px', border: 'none',
+                background: 'rgba(255,255,255,0.04)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
           )}
         </div>
-
-        {error && (
-          <p style={{ color: '#f87171', fontSize: '11px', marginTop: '8px', padding: '0 4px', fontFamily: 'monospace' }}
-             data-testid="pip-error">{error}</p>
+        {hasCtx && !guideActive && (
+          <div data-testid="pip-screen-context" style={{
+            display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px',
+            background: 'rgba(99,102,241,0.05)', borderRadius: '8px', padding: '5px 10px',
+            border: '1px solid rgba(99,102,241,0.08)',
+          }}>
+            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#818cf8', flexShrink: 0 }} />
+            <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{screenContext}</p>
+          </div>
         )}
       </div>
 
-      {/* ── Results Area ── */}
-      <div style={{ flex: 1, padding: '12px 16px 16px', overflowY: 'auto' }}>
-
-        {/* Insight chip */}
-        {insight && phase === 'input' && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-            borderRadius: '8px', padding: '5px 10px', marginBottom: '12px',
-          }} data-testid="pip-insight">
-            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#818cf8' }} />
-            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: '500', letterSpacing: '0.02em' }}>
-              {insight}
-            </span>
-          </div>
-        )}
+      {/* Content */}
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
         {/* Empty state */}
-        {phase === 'input' && !input.trim() && (
-          <div style={{ textAlign: 'center', padding: '32px 0' }}>
-            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.15)', lineHeight: '1.6' }}>
-              Paste a message, describe a situation,<br />or ask how to respond.
+        {messages.length === 0 && !loading && (
+          <div style={{ textAlign: 'center', padding: '28px 8px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+            {insight && mode === 'tilt' && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '4px 10px', marginBottom: '10px' }} data-testid="pip-insight">
+                <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#818cf8' }} />
+                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', fontWeight: '500' }}>{insight}</span>
+              </div>
+            )}
+            <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.15)', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
+              {mode === 'tilt'
+                ? (hasCtx ? 'I can see your screen.\nAsk anything or tell me what to do.' : 'Ask me anything or say\n"help me do X" for step-by-step guidance.')
+                : 'Describe a situation to get\nSafe, Smart & Bold options.'}
             </p>
           </div>
         )}
 
-        {/* Loading shimmer */}
-        {phase === 'loading' && (
-          <div data-testid="pip-loading" style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '4px 0' }}>
-            {[1, 2, 3].map(i => (
-              <div key={i} style={{
-                height: '40px', borderRadius: '10px',
-                background: 'linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%)',
-                backgroundSize: '200% 100%', animation: 'shimmer 1.5s ease-in-out infinite',
-              }} />
+        {/* Guide header — shown when guide is active */}
+        {guideActive && guideResult && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(99,102,241,0.08)', borderRadius: '8px', padding: '6px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: guideResult.is_complete ? '#4ade80' : '#818cf8', animation: guideResult.is_complete ? 'none' : 'pulse 1.5s infinite' }} />
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>
+                {guideResult.is_complete ? 'Done!' : `Step ${guideStep}`}
+              </span>
+              {voiceMode && (
+                <span style={{ fontSize: '9px', color: speaking ? '#818cf8' : 'rgba(129,140,248,0.4)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  </svg>
+                  {speaking ? 'Speaking...' : 'Voice on'}
+                </span>
+              )}
+            </div>
+            <button onClick={stopGuide} data-testid="guide-stop-btn" style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '6px', padding: '3px 10px', cursor: 'pointer',
+              color: 'rgba(255,255,255,0.35)', fontSize: '10px', fontFamily: "'Inter', sans-serif",
+            }}>Stop</button>
+          </div>
+        )}
+
+        {/* Completed steps */}
+        {guideSteps.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+            {guideSteps.map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '1px 6px' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', textDecoration: 'line-through' }}>{s}</span>
+              </div>
             ))}
           </div>
         )}
 
-        {/* Decision cards — compact rows */}
-        {phase === 'decisions' && decisions && (
-          <div data-testid="pip-decision-cards" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {['safe', 'smart', 'bold'].map((type) => {
-              const d = decisions[type];
-              const c = cardStyles[type];
-              const isPref = type === preferred;
+        {/* Messages — chat + guide inline */}
+        {messages.map((msg) => (
+          <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+            {msg.role === 'user' ? (
+              <div style={{ background: 'rgba(99,102,241,0.15)', borderRadius: '12px 12px 4px 12px', padding: '8px 12px', maxWidth: '85%' }}>
+                <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', margin: 0, lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.content}</p>
+              </div>
+            ) : (
+              <div style={{ maxWidth: '100%', width: '100%' }}>
+                {msg.decisionType && <span style={{ fontSize: '9px', fontWeight: '600', textTransform: 'uppercase', color: tagColors[msg.decisionType], marginBottom: '3px', display: 'block' }}>{msg.decisionType}</span>}
+
+                {/* Guide response — annotated screenshot + instruction inline */}
+                {msg.isGuide ? (
+                  <div data-testid="guide-view" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {annotatedImage && (
+                      <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(129,140,248,0.2)' }}>
+                        <img src={annotatedImage} alt="Guide" data-testid="guide-annotated-image" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                      </div>
+                    )}
+                    <div style={{ background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.15)', borderRadius: '10px', padding: '10px 12px' }} data-testid="guide-instruction">
+                      <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', margin: 0, lineHeight: '1.5', fontWeight: '500' }}>{guideResult?.instruction || msg.content}</p>
+                      {(guideResult?.detail || msg.guideData?.detail) && (
+                        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', margin: '4px 0 0' }}>{guideResult?.detail || msg.guideData?.detail}</p>
+                      )}
+                    </div>
+                    {!guideResult?.is_complete && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '0 2px' }}>
+                        <div style={{ display: 'flex', gap: '3px' }}>
+                          {[0,1,2].map(i => <div key={i} style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(129,140,248,0.4)', animation: `bounce 1.5s ease-in-out ${i*0.2}s infinite` }} />)}
+                        </div>
+                        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.18)' }}>Watching... I'll auto-advance</span>
+                      </div>
+                    )}
+                    {guideResult?.is_complete && (
+                      <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: '8px', padding: '8px 10px', textAlign: 'center' }} data-testid="guide-complete">
+                        <p style={{ fontSize: '12px', color: '#4ade80', margin: 0, fontWeight: '600' }}>Task complete!</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Normal chat response */
+                  <>
+                    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '4px 12px 12px 12px', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.75)', margin: 0, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                      {msg.reasoning && <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', margin: '6px 0 0' }}>{msg.reasoning}</p>}
+                    </div>
+                    <button onClick={() => handleCopy(msg.content, msg.id)} data-testid={`copy-msg-${msg.id}`}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', color: copied === msg.id ? '#4ade80' : 'rgba(255,255,255,0.2)', fontSize: '10px', fontFamily: "'Inter', sans-serif", marginTop: '2px' }}>
+                      {copied === msg.id ? 'copied' : 'copy'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Decision cards */}
+        {decisions && (
+          <div data-testid="pip-decision-cards" style={{ background: 'rgba(255,255,255,0.02)', borderRadius: '12px', padding: '6px', border: '1px solid rgba(255,255,255,0.04)' }}>
+            <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace', padding: '0 6px 4px', display: 'block' }}>arrow keys + Enter</span>
+            {['safe', 'smart', 'bold'].map((type, idx) => {
+              const d = decisions[type]; const isPref = type === preferred; const isActive = idx === activeIdx;
               return (
-                <button key={type} onClick={() => handleSelect(type)} data-testid={`pip-card-${type}`}
+                <button key={type} onClick={() => handleSelectDecision(type)} data-testid={`pip-card-${type}`}
+                  onMouseEnter={() => setActiveIdx(idx)}
                   style={{
-                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-                    padding: '10px 12px', borderRadius: '10px', border: 'none',
-                    background: isPref ? 'rgba(129,140,248,0.08)' : 'transparent',
-                    cursor: 'pointer', transition: 'background 0.1s',
-                    fontFamily: "'Inter', sans-serif",
-                  }}
-                  onMouseEnter={(e) => { if (!isPref) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                  onMouseLeave={(e) => { if (!isPref) e.currentTarget.style.background = 'transparent'; }}
-                >
-                  {/* Tag pill */}
-                  <span style={{
-                    fontSize: '10px', fontWeight: '600', textTransform: 'uppercase',
-                    letterSpacing: '0.06em', color: c.accent, flexShrink: 0,
-                    width: '42px', textAlign: 'left',
-                  }}>{c.tag}</span>
-
-                  {/* Preview — single line */}
-                  <span style={{
-                    flex: 1, fontSize: '13px', color: 'rgba(255,255,255,0.45)',
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                    textAlign: 'left',
-                  }}>{d?.response}</span>
-
-                  {/* Arrow */}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="2" style={{ flexShrink: 0 }}>
-                    <polyline points="9 18 15 12 9 6"/>
-                  </svg>
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 10px', borderRadius: '8px', border: 'none',
+                    background: isActive ? 'rgba(129,140,248,0.12)' : isPref ? 'rgba(129,140,248,0.06)' : 'transparent',
+                    cursor: 'pointer', fontFamily: "'Inter', sans-serif",
+                    outline: isActive ? '1px solid rgba(129,140,248,0.25)' : 'none',
+                  }}>
+                  <span style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', color: tagColors[type], flexShrink: 0, width: '40px', textAlign: 'left' }}>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                  <span style={{ flex: 1, fontSize: '12px', color: 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'left' }}>{d?.response}</span>
+                  {isPref && <span style={{ fontSize: '8px', fontWeight: '600', color: 'rgba(129,140,248,0.5)', background: 'rgba(129,140,248,0.08)', padding: '2px 5px', borderRadius: '4px', flexShrink: 0 }} data-testid={`pip-preferred-${type}`}>pref</span>}
                 </button>
               );
             })}
           </div>
         )}
 
-        {/* Output */}
-        {phase === 'output' && decisions && selectedType && (
-          <div data-testid="pip-output">
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px',
-            }}>
-              <span style={{
-                fontSize: '10px', fontWeight: '600', textTransform: 'uppercase',
-                letterSpacing: '0.08em', color: cardStyles[selectedType].accent,
-              }}>{cardStyles[selectedType].tag} Response</span>
+        {loading && (
+          <div data-testid="pip-loading" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 4px' }}>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {[0,1,2].map(i => <div key={i} style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(148,163,184,0.4)', animation: `bounce 1.2s ease-in-out ${i*0.15}s infinite` }} />)}
             </div>
-
-            <div style={{
-              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-              borderRadius: '12px', padding: '14px', marginBottom: '10px',
-            }} data-testid="pip-response-text">
-              <p style={{
-                fontSize: '14px', lineHeight: '1.7', margin: 0,
-                color: 'rgba(255,255,255,0.85)', fontFamily: "'Inter', sans-serif",
-              }}>{decisions[selectedType]?.response}</p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-              <button onClick={handleCopy} data-testid="pip-copy-btn" style={{
-                flex: 1, padding: '8px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)',
-                background: copied ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.06)',
-                color: copied ? '#4ade80' : 'rgba(255,255,255,0.5)',
-                fontSize: '12px', fontWeight: '500', cursor: 'pointer',
-                fontFamily: "'Inter', sans-serif", transition: 'all 0.15s',
-              }}>
-                {copied ? '✓ Copied' : 'Copy'}
-              </button>
-              <button onClick={handleReset} data-testid="pip-new-decision-btn" style={{
-                flex: 1, padding: '8px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)',
-                background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)',
-                fontSize: '12px', fontWeight: '500', cursor: 'pointer',
-                fontFamily: "'Inter', sans-serif", transition: 'all 0.15s',
-              }}>
-                New ↻
-              </button>
-            </div>
-
-            {decisions.reasoning?.[selectedType] && (
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '10px' }} data-testid="pip-reasoning">
-                <p style={{
-                  fontSize: '11px', lineHeight: '1.5', color: 'rgba(255,255,255,0.25)',
-                  fontStyle: 'italic', margin: 0,
-                }}>
-                  {decisions.reasoning[selectedType]}
-                </p>
-              </div>
-            )}
+            <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)' }}>
+              {mode === 'decide' ? 'Generating options...' : 'Thinking...'}
+            </span>
           </div>
         )}
       </div>
+
+      {/* Input — always at bottom */}
+      <div style={{ padding: '6px 12px 10px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(2,6,23,0.95)' }}>
+        <div style={{
+          background: 'linear-gradient(180deg, rgba(51,65,85,0.5) 0%, rgba(30,41,59,0.6) 100%)',
+          backdropFilter: 'blur(24px)', border: '1px solid rgba(148,163,184,0.12)',
+          borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 6px 3px 14px',
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.4)" strokeWidth="2" style={{ flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)}
+            placeholder={transcribing ? 'Transcribing...' : recording ? 'Listening...' : messages.length > 0 || guideActive ? 'Continue...' : mode === 'decide' ? 'Describe the situation...' : 'Ask anything or say "help me do X"...'}
+            data-testid="pip-decision-input" disabled={loading || recording || transcribing}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !decisions && input.trim()) {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSubmit();
+              }
+            }}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f1f5f9', fontSize: '14px', fontFamily: "'Inter', sans-serif", padding: '9px 0', opacity: (loading || transcribing) ? 0.4 : 1 }}
+          />
+          {/* Mic button */}
+          <button onClick={toggleRecording} data-testid="pip-mic-btn" disabled={loading || transcribing}
+            style={{
+              width: '32px', height: '32px', borderRadius: '50%', border: 'none', cursor: 'pointer',
+              background: recording ? 'rgba(239,68,68,0.3)' : transcribing ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              transition: 'all 0.2s',
+              animation: recording ? 'pulse 1s infinite' : 'none',
+            }}>
+            {transcribing ? (
+              <div style={{ width: '14px', height: '14px', border: '2px solid rgba(129,140,248,0.4)', borderTopColor: '#818cf8', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeWidth="2"
+                stroke={recording ? '#ef4444' : 'rgba(255,255,255,0.4)'} style={{ transition: 'stroke 0.2s' }}>
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            )}
+          </button>
+          {input.trim() && !loading && !recording && !transcribing && (
+            <button onClick={handleSubmit} data-testid="pip-submit-btn" style={{
+              background: 'rgba(129,140,248,0.2)', border: '1px solid rgba(129,140,248,0.15)',
+              borderRadius: '8px', padding: '5px 12px', cursor: 'pointer',
+              color: 'rgba(199,210,254,0.8)', fontSize: '11px', fontFamily: "'Inter', sans-serif", fontWeight: '600',
+            }}>Send</button>
+          )}
+        </div>
+        {error && <p style={{ color: '#f87171', fontSize: '10px', marginTop: '4px', fontFamily: 'monospace' }} data-testid="pip-error">{error}</p>}
+      </div>
+
+      <style>{`
+        @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
