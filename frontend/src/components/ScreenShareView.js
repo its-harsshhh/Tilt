@@ -66,11 +66,8 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2.5 glass-surface rounded-full px-4 py-2">
-            <div className="w-5 h-5 rounded-md bg-white/10 border border-white/20 flex items-center justify-center">
-              <span className="text-white font-heading font-semibold text-[10px]">T</span>
-            </div>
-            <span className="font-heading text-sm font-medium text-white/80">Tilt</span>
+          <div className="glass-surface rounded-full px-4 py-2" data-testid="tilt-logo">
+            <img src="/tilt-logo.svg" alt="Tilt" className="h-5" />
           </div>
 
           <div className="flex items-center gap-2 glass-surface rounded-full px-3.5 py-2" data-testid="screen-active-indicator">

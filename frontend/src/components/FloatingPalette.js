@@ -13,6 +13,8 @@ const ICONS = {
   zap: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
 };
 
+const LOGO_URL = window.location.origin + '/tilt-logo.svg';
+
 export default function FloatingPalette({ screenContext, onRequestClose }) {
   const [input, setInput] = useState('');
   const [phase, setPhase] = useState('input');
@@ -112,17 +114,12 @@ export default function FloatingPalette({ screenContext, onRequestClose }) {
         marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.06)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{
-            width: '22px', height: '22px', borderRadius: '6px',
-            background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '10px', fontWeight: '600',
-          }}>T</div>
+          <img src={LOGO_URL} alt="Tilt" style={{ height: '16px' }} data-testid="pip-tilt-logo" />
           <span style={{
             fontSize: '10px', fontFamily: "'JetBrains Mono', monospace",
             letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)',
           }}>
-            {phase === 'loading' ? 'Thinking...' : phase === 'decisions' ? 'Choose approach' : phase === 'output' ? 'Ready' : 'Tilt'}
+            {phase === 'loading' ? 'Thinking...' : phase === 'decisions' ? 'Choose approach' : phase === 'output' ? 'Ready' : ''}
           </span>
         </div>
         {screenContext && (

@@ -17,11 +17,8 @@ export default function LandingPage({ onStartScreenShare }) {
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-3xl">
         {/* Logo */}
-        <div className="mb-12 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
-            <span className="text-white font-heading font-semibold text-sm">T</span>
-          </div>
-          <span className="font-heading text-lg font-medium text-white/80 tracking-wide">Tilt</span>
+        <div className="mb-12" data-testid="tilt-logo">
+          <img src="/tilt-logo.svg" alt="Tilt" className="h-10" />
         </div>
 
         {/* Headline */}

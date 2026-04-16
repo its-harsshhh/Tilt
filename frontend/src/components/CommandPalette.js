@@ -99,9 +99,7 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
         {/* Header bar */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
           <div className="flex items-center gap-3">
-            <div className="w-5 h-5 rounded-md bg-white/10 border border-white/15 flex items-center justify-center">
-              <span className="text-white font-heading font-semibold text-[10px]">T</span>
-            </div>
+            <img src="/tilt-logo.svg" alt="Tilt" className="h-4" data-testid="tilt-logo" />
             <span className="font-mono text-[10px] tracking-widest uppercase text-white/30">
               {phase === 'loading' ? 'Thinking...' : phase === 'decisions' ? 'Choose your approach' : phase === 'output' ? 'Response ready' : 'Decision mode'}
             </span>
