@@ -97,15 +97,19 @@ function FeatureCard({ title, copy, icon, accent, border }) {
 function FeaturesSection() {
   return (
     <section className="relative bg-white py-24 px-6 overflow-hidden" data-testid="features-section">
-      {/* Soft decorative clouds — CSS only, matching Ghibli vibe */}
-      <div className="absolute top-0 left-0 w-72 h-40 opacity-[0.04] pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at 30% 50%, #6366f1, transparent 70%)', filter: 'blur(40px)' }} />
-      <div className="absolute bottom-0 right-0 w-80 h-44 opacity-[0.04] pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at 70% 50%, #0ea5e9, transparent 70%)', filter: 'blur(40px)' }} />
-      <div className="absolute top-12 right-16 w-48 h-24 opacity-[0.06] pointer-events-none rounded-full"
-        style={{ background: 'linear-gradient(135deg, #bfdbfe, #e0e7ff)', filter: 'blur(20px)' }} />
-      <div className="absolute bottom-16 left-12 w-36 h-20 opacity-[0.06] pointer-events-none rounded-full"
-        style={{ background: 'linear-gradient(135deg, #ddd6fe, #fbcfe8)', filter: 'blur(20px)' }} />
+      {/* Ghibli art decorations — corners */}
+      <div className="absolute -top-4 -left-4 w-48 h-48 opacity-[0.08] pointer-events-none rounded-br-[40px] overflow-hidden">
+        <img src="/ghibli-clouds.jpg" alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="absolute -top-4 -right-4 w-44 h-36 opacity-[0.07] pointer-events-none rounded-bl-[40px] overflow-hidden">
+        <img src="/ghibli-summer.jpg" alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="absolute -bottom-4 -left-4 w-52 h-40 opacity-[0.06] pointer-events-none rounded-tr-[40px] overflow-hidden">
+        <img src="/ghibli-mountain.jpg" alt="" className="w-full h-full object-cover" />
+      </div>
+      <div className="absolute -bottom-4 -right-4 w-40 h-40 opacity-[0.08] pointer-events-none rounded-tl-[40px] overflow-hidden">
+        <img src="/ghibli-clouds.jpg" alt="" className="w-full h-full object-cover" style={{ objectPosition: 'right bottom' }} />
+      </div>
 
       <div className="max-w-3xl mx-auto relative z-10">
         {/* Section header */}
@@ -260,11 +264,58 @@ export default function LandingPage({ onStartScreenShare, isSharing, onStop, onO
       {/* ===== FEATURES ===== */}
       <FeaturesSection />
 
-      {/* ===== FOOTER ===== */}
-      <footer className="bg-white border-t border-slate-100 py-8 px-6">
-        <div className="max-w-3xl mx-auto text-center">
-          <img src="/tilt-logo-dark.svg" alt="Tilt" className="h-5 mx-auto mb-3 opacity-40" />
-          <p className="font-body text-[11px] text-slate-400">Better decisions, in context.</p>
+      {/* ===== FOOTER — Large watermark logo + dot grid + footer bar ===== */}
+      <footer className="relative overflow-hidden" style={{ background: '#fafafa' }} data-testid="footer">
+        {/* Dot grid pattern */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          backgroundImage: 'radial-gradient(circle, #d1d5db 0.8px, transparent 0.8px)',
+          backgroundSize: '24px 24px',
+          opacity: 0.4,
+        }} />
+
+        {/* Large watermark logo */}
+        <div className="relative flex items-center justify-center py-20 md:py-28 overflow-hidden">
+          <img
+            src="/footer-logo.svg"
+            alt=""
+            className="w-[80%] max-w-[700px] h-auto pointer-events-none select-none"
+            style={{ opacity: 0.04 }}
+          />
+        </div>
+
+        {/* Footer bar */}
+        <div className="relative z-10 border-t border-slate-200/60 px-6 md:px-12 py-5">
+          <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5 flex-wrap justify-center md:justify-start">
+              <span className="font-body text-[12px] text-slate-400">
+                Built and crafted by Harsh
+              </span>
+              <span className="text-red-500 text-[12px]">&#10084;</span>
+              <span className="text-slate-300 text-[12px]">&#8226;</span>
+              <span className="font-body text-[12px] text-slate-400">
+                Powered by Chole bhature & AI
+              </span>
+            </div>
+
+            <span className="font-body text-[12px] text-slate-400">
+              &copy; 2026 Harsh Pal. All rights reserved
+            </span>
+
+            <div className="flex items-center gap-4">
+              {/* X (Twitter) */}
+              <a href="https://x.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-slate-600 transition-colors" data-testid="footer-x-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                </svg>
+              </a>
+              {/* LinkedIn */}
+              <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-slate-600 transition-colors" data-testid="footer-linkedin-link">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                </svg>
+              </a>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
