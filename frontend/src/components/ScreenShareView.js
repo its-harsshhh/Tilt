@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Circle, MonitorOff, Command, ExternalLink, Eye } from 'lucide-react';
 import { setVideoElement } from '../hooks/pipHelper';
+import { logActivity } from '../hooks/useMemory';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -64,6 +65,8 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
         if (captureActivityRef) {
           captureActivityRef.current = activity;
         }
+        // Track activity in session memory
+        logActivity(activity, ctx_text);
       }
     } catch (err) {
       if (err.name !== 'AbortError') {

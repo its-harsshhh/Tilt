@@ -3,9 +3,13 @@ import LandingPage from './components/LandingPage';
 import ScreenShareView from './components/ScreenShareView';
 import CommandPalette from './components/CommandPalette';
 import { openFloatingPalette, closeFloatingPalette, isPipOpen, renderPalette } from './hooks/pipHelper';
+import { logSessionOpen } from './hooks/useMemory';
 
 export default function App() {
   const [screenStream, setScreenStream] = useState(null);
+
+  // Log session open once
+  useEffect(() => { logSessionOpen(); }, []);
   const [isSharing, setIsSharing] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pipSupported, setPipSupported] = useState(false);
