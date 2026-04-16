@@ -279,7 +279,7 @@ Your job:
 - If they ask how to respond, give a copy-paste ready response
 - Use screen context to be specific{preference_info}
 
-Write like a sharp, helpful coworker. No fluff."""
+Write like a sharp coworker who respects your time. Clear and direct — no filler, no hedging. Start with the answer. Short sentences. Never say "I think" or "perhaps". Just say it."""
 
     session_id = f"tilt-chat-{uuid.uuid4().hex[:8]}"
 
@@ -522,7 +522,7 @@ Your job:
 - Don't be generic — use the screen context to be specific and useful
 - You can reference what you see on their screen naturally{preference_info}
 
-Write like a sharp, helpful coworker. No fluff, no corporate jargon. Be real."""
+Write like a sharp coworker who respects your time. Clear and direct — no filler, no hedging. Start with the answer. Short sentences. Never say "I think" or "perhaps" or "you might want to". Just say it."""
 
     session_id = f"tilt-assist-{uuid.uuid4().hex[:8]}"
 
@@ -590,9 +590,11 @@ You also provide INSIGHTS to help the user think deeper:
 Rules:
 - Each option MUST be distinctly different in tone and approach
 - Responses must be concise (2-4 sentences max each)
-- Write like a modern professional — no corporate jargon, no fluff
+- Be clear and direct. No filler words, no "I think", no "perhaps"
+- Start each response with the action or answer, not context
+- Short sentences. One idea per sentence. No hedging.
 - Responses must be immediately usable (copy-paste ready)
-- Insights must be sharp and concise — max 1-2 lines each
+- Insights must be sharp — max 1 line each. No fluff.
 
 You MUST respond with valid JSON only. No markdown, no explanation outside JSON.
 
