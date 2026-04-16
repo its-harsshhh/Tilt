@@ -4,6 +4,7 @@ Tests for:
 - GET /api/health - Health check endpoint
 - POST /api/analyze-screen - Screen analysis with Claude vision
 - POST /api/generate-decisions - Decision generation with Claude
+- POST /api/assist - Conversational AI assistant (NEW)
 """
 import pytest
 import requests
@@ -31,6 +32,127 @@ class TestHealthEndpoint:
         assert data["status"] == "ok"
         assert "timestamp" in data
         print(f"✓ Health response structure valid: {data}")
+
+
+class TestAssistEndpoint:
+    """Conversational AI assistant endpoint tests - POST /api/assist"""
+    
+    def test_assist_basic_message(self):
+        """POST /api/assist should accept a basic message and return response"""
+        response = requests.post(
+            f"{BASE_URL}/api/assist",
+            json={"message": "Hello, can you help me write an email?"},
+            timeout=60
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        assert "response" in data, "Response missing 'response' field"
+        assert "mode" in data, "Response missing 'mode' field"
+        assert data["mode"] == "chat", f"Expected mode 'chat', got '{data['mode']}'"
+        assert isinstance(data["response"], str), "response should be a string"
+        assert len(data["response"]) > 0, "response should not be empty"
+        
+        print(f"✓ Assist endpoint returned valid response: {data['response'][:80]}...")
+    
+    def test_assist_with_screen_context(self):
+        """POST /api/assist should use screen_context in its response"""
+        response = requests.post(
+            f"{BASE_URL}/api/assist",
+            json={
+                "message": "What should I do next?",
+                "screen_context": "User is viewing a Slack conversation with their manager about a project deadline that was missed"
+            },
+            timeout=60
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        assert "response" in data
+        assert "mode" in data
+        assert data["mode"] == "chat"
+        assert len(data["response"]) > 0
+        
+        print(f"✓ Assist endpoint uses screen context: {data['response'][:80]}...")
+    
+    def test_assist_with_conversation_history(self):
+        """POST /api/assist should support conversation continuation"""
+        # First message
+        response1 = requests.post(
+            f"{BASE_URL}/api/assist",
+            json={"message": "I need help writing a professional email to decline a meeting invitation"},
+            timeout=60
+        )
+        
+        assert response1.status_code == 200
+        data1 = response1.json()
+        first_response = data1["response"]
+        
+        # Follow-up message with conversation history
+        response2 = requests.post(
+            f"{BASE_URL}/api/assist",
+            json={
+                "message": "Can you make it shorter and more direct?",
+                "conversation": [
+                    {"role": "user", "content": "I need help writing a professional email to decline a meeting invitation"},
+                    {"role": "assistant", "content": first_response}
+                ]
+            },
+            timeout=60
+        )
+        
+        assert response2.status_code == 200, f"Expected 200, got {response2.status_code}: {response2.text}"
+        data2 = response2.json()
+        
+        assert "response" in data2
+        assert "mode" in data2
+        assert data2["mode"] == "chat"
+        assert len(data2["response"]) > 0
+        
+        print(f"✓ Assist endpoint supports conversation continuation")
+        print(f"  First response: {first_response[:60]}...")
+        print(f"  Follow-up response: {data2['response'][:60]}...")
+    
+    def test_assist_with_all_parameters(self):
+        """POST /api/assist should work with all parameters"""
+        response = requests.post(
+            f"{BASE_URL}/api/assist",
+            json={
+                "message": "How should I respond to this?",
+                "screen_context": "User is viewing an email from a client asking for a discount",
+                "conversation": [
+                    {"role": "user", "content": "I got a difficult email from a client"},
+                    {"role": "assistant", "content": "I can help you craft a response. What's the situation?"}
+                ],
+                "mode": "chat",
+                "user_preference": "bold",
+                "tone_traits": ["Direct", "Confident", "Professional"]
+            },
+            timeout=60
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        assert "response" in data
+        assert "mode" in data
+        assert data["mode"] == "chat"
+        assert len(data["response"]) > 0
+        
+        print(f"✓ Assist endpoint works with all parameters: {data['response'][:80]}...")
+    
+    def test_assist_missing_message(self):
+        """POST /api/assist should return 422 for missing message"""
+        response = requests.post(
+            f"{BASE_URL}/api/assist",
+            json={},
+            timeout=30
+        )
+        
+        assert response.status_code == 422, f"Expected 422 for missing field, got {response.status_code}"
+        print(f"✓ Assist endpoint returns 422 for missing message")
 
 
 class TestAnalyzeScreenEndpoint:

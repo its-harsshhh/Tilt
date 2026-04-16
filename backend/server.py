@@ -50,6 +50,20 @@ class ScreenAnalysisResponse(BaseModel):
     activity: str
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class AssistRequest(BaseModel):
+    message: str
+    screen_context: Optional[str] = None
+    conversation: Optional[list] = None
+    mode: Optional[str] = "chat"
+    user_preference: Optional[str] = None
+    tone_traits: Optional[list] = None
+
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
@@ -108,6 +122,70 @@ Respond as JSON only:
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Screen analysis failed: {str(e)}")
+
+
+@app.post("/api/assist")
+async def assist(request: AssistRequest):
+    if not EMERGENT_KEY:
+        raise HTTPException(status_code=500, detail="LLM key not configured")
+
+    screen_info = ""
+    if request.screen_context:
+        screen_info = f"\n\n[SCREEN CONTEXT — what the user is currently looking at]\n{request.screen_context}"
+
+    preference_info = ""
+    if request.user_preference:
+        preference_info = f"\nUser's preferred communication style: {request.user_preference}."
+    if request.tone_traits and len(request.tone_traits) > 0:
+        preference_info += f" Tone traits: {', '.join(request.tone_traits)}."
+
+    system_prompt = f"""You are Tilt — an AI assistant that sees the user's screen and helps them get things done.
+
+You are like a smart coworker looking over their shoulder. You can see what they're working on via screen context.{screen_info}
+
+Your job:
+- Help the user with whatever they're doing right now
+- Be concise, actionable, and direct (2-5 sentences max)
+- If they're writing something (email, message, document), help draft or improve it
+- If they're stuck on a task, give clear next steps
+- If they ask how to respond to something, give them the best response they can copy-paste
+- Don't be generic — use the screen context to be specific and useful
+- You can reference what you see on their screen naturally{preference_info}
+
+Write like a sharp, helpful coworker. No fluff, no corporate jargon. Be real."""
+
+    session_id = f"tilt-assist-{uuid.uuid4().hex[:8]}"
+
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_KEY,
+            session_id=session_id,
+            system_message=system_prompt,
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+        # Build conversation context
+        conv_context = ""
+        if request.conversation and len(request.conversation) > 0:
+            recent = request.conversation[-6:]  # last 3 exchanges
+            for msg in recent:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                if role == "user":
+                    conv_context += f"\nUser: {content}"
+                else:
+                    conv_context += f"\nAssistant: {content}"
+
+        user_text = request.message
+        if conv_context:
+            user_text = f"Previous conversation:{conv_context}\n\nUser's new message: {request.message}"
+
+        user_message = UserMessage(text=user_text)
+        response = await chat.send_message(user_message)
+
+        return {"response": response.strip(), "mode": "chat"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Assist failed: {str(e)}")
 
 
 @app.post("/api/generate-decisions")
