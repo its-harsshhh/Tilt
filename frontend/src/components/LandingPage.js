@@ -54,10 +54,10 @@ export default function LandingPage({ onStartScreenShare }) {
         <div className="mt-8 flex flex-col items-center gap-2">
           <div className="flex items-center gap-2 text-white/20 font-mono text-xs tracking-widest uppercase">
             <Command size={12} />
-            <span>then press Cmd + K to decide</span>
+            <span>a floating palette opens on top of any window</span>
           </div>
           <span className="font-body text-[11px] text-white/15">
-            Tip: Share your screen, then come back to this tab to use Cmd+K
+            Share your screen, then use the floating palette from any tab
           </span>
         </div>
       </div>

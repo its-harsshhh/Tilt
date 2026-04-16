@@ -1,32 +1,12 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Circle, MonitorOff, Command } from 'lucide-react';
+import { Circle, MonitorOff, Command, ExternalLink } from 'lucide-react';
 
-export default function ScreenShareView({ stream, onStop, onOpenPalette, captureContextRef, isTabAway }) {
+export default function ScreenShareView({ stream, onStop, onOpenPalette, captureContextRef }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [contextLabel, setContextLabel] = useState('Observing');
-  const [showReturnHint, setShowReturnHint] = useState(false);
-  const [justReturned, setJustReturned] = useState(false);
   const intervalRef = useRef(null);
-  const wasAwayRef = useRef(false);
-
-  // Detect when user returns from another tab — show a prominent hint
-  useEffect(() => {
-    if (isTabAway) {
-      wasAwayRef.current = true;
-    } else if (wasAwayRef.current) {
-      // User just returned to Tilt tab
-      wasAwayRef.current = false;
-      setJustReturned(true);
-      setShowReturnHint(true);
-      const t = setTimeout(() => {
-        setShowReturnHint(false);
-        setJustReturned(false);
-      }, 4000);
-      return () => clearTimeout(t);
-    }
-  }, [isTabAway]);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -44,27 +24,21 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
     canvas.height = 360;
     ctx.drawImage(video, 0, 0, 640, 360);
 
-    // We'll use a simulated context label since we're not doing real OCR
     const labels = ['Writing', 'Browsing', 'Reading', 'Working', 'Composing'];
     const randomLabel = labels[Math.floor(Math.random() * labels.length)];
     setContextLabel(randomLabel);
 
-    // Flash the capture indicator
     setIsCapturing(true);
     setTimeout(() => setIsCapturing(false), 800);
 
-    // Store context for the command palette
     if (captureContextRef) {
       captureContextRef.current = randomLabel;
     }
   }, [captureContextRef]);
 
   useEffect(() => {
-    // Start periodic capture every 7 seconds
     intervalRef.current = setInterval(captureFrame, 7000);
-    // Initial capture after 2 seconds
     const initial = setTimeout(captureFrame, 2000);
-
     return () => {
       clearInterval(intervalRef.current);
       clearTimeout(initial);
@@ -76,7 +50,7 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
       {/* Animated border */}
       <div className="animated-border" />
 
-      {/* Video feed fills background */}
+      {/* Video feed */}
       <video
         ref={videoRef}
         autoPlay
@@ -86,12 +60,11 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
         data-testid="screen-share-video"
       />
 
-      {/* Hidden canvas for captures */}
+      {/* Hidden canvas */}
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* Top bar overlay */}
+      {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4">
-        {/* Left: Logo + status */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5 glass-surface rounded-full px-4 py-2">
             <div className="w-5 h-5 rounded-md bg-white/10 border border-white/20 flex items-center justify-center">
@@ -100,7 +73,6 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
             <span className="font-heading text-sm font-medium text-white/80">Tilt</span>
           </div>
 
-          {/* Recording indicator */}
           <div className="flex items-center gap-2 glass-surface rounded-full px-3.5 py-2" data-testid="screen-active-indicator">
             <Circle
               size={8}
@@ -113,26 +85,22 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
           </div>
         </div>
 
-        {/* Right: Context + Controls */}
         <div className="flex items-center gap-3">
-          {/* Context label */}
           <div className="glass-surface rounded-full px-3.5 py-2" data-testid="context-label">
             <span className="font-mono text-[10px] tracking-widest uppercase text-white/40">
               Context: <span className="text-white/70">{contextLabel}</span>
             </span>
           </div>
 
-          {/* Cmd+K hint */}
           <button
             onClick={onOpenPalette}
             data-testid="open-palette-btn"
             className="glass-surface rounded-full px-3.5 py-2 hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-2"
           >
-            <Command size={11} className="text-white/40" />
-            <span className="font-mono text-[10px] tracking-widest uppercase text-white/40">K</span>
+            <ExternalLink size={11} className="text-white/40" />
+            <span className="font-mono text-[10px] tracking-widest uppercase text-white/40">Palette</span>
           </button>
 
-          {/* Stop sharing */}
           <button
             onClick={onStop}
             data-testid="stop-screen-share-btn"
@@ -144,7 +112,7 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
         </div>
       </div>
 
-      {/* Bottom center: Command hint */}
+      {/* Bottom center hint */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-50">
         <button
           onClick={onOpenPalette}
@@ -156,32 +124,20 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
             <span className="font-mono text-[11px] text-white/50">K</span>
           </div>
           <span className="font-body text-sm text-white/40 group-hover:text-white/60 transition-colors">
-            What do you want to do here?
+            Open floating decision palette
           </span>
         </button>
       </div>
 
-      {/* Welcome back hint — shows when user returns from another tab */}
-      {showReturnHint && (
-        <div className="absolute inset-0 z-[60] flex items-center justify-center pointer-events-none animate-fade-in" data-testid="return-hint-overlay">
-          <div className="glass-surface rounded-3xl px-10 py-8 text-center max-w-md pointer-events-auto animate-zoom-in">
-            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-4">
-              <Command size={18} className="text-white/70" />
-            </div>
-            <p className="font-heading text-xl font-light text-white mb-2">Welcome back</p>
-            <p className="font-body text-sm text-white/40 mb-5">
-              Press <span className="font-mono text-white/70 bg-white/10 px-2 py-0.5 rounded-md text-xs">Cmd + K</span> here to open the decision palette
-            </p>
-            <button
-              onClick={() => { setShowReturnHint(false); onOpenPalette(); }}
-              data-testid="open-palette-from-hint"
-              className="px-5 py-2.5 rounded-xl bg-white text-black font-body font-medium text-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
-            >
-              Open Decision Palette
-            </button>
-          </div>
+      {/* Info banner: floating palette opens on top of other windows */}
+      <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+        <div className="glass-surface rounded-full px-4 py-2 flex items-center gap-2">
+          <ExternalLink size={11} className="text-blue-400/60" />
+          <span className="font-mono text-[9px] tracking-widest uppercase text-white/30">
+            Floating palette opens on top of any window
+          </span>
         </div>
-      )}
+      </div>
     </div>
   );
 }

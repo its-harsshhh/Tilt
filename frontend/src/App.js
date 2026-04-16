@@ -2,14 +2,18 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import LandingPage from './components/LandingPage';
 import ScreenShareView from './components/ScreenShareView';
 import CommandPalette from './components/CommandPalette';
-import ReturnBanner from './components/ReturnBanner';
+import { openFloatingPalette, closeFloatingPalette, isPipOpen, renderPalette } from './hooks/pipHelper';
 
 export default function App() {
   const [screenStream, setScreenStream] = useState(null);
   const [isSharing, setIsSharing] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [isTabAway, setIsTabAway] = useState(false);
+  const [pipSupported, setPipSupported] = useState(false);
   const captureContextRef = useRef('Working');
+
+  useEffect(() => {
+    setPipSupported('documentPictureInPicture' in window);
+  }, []);
 
   const startScreenShare = useCallback(async () => {
     try {
@@ -19,26 +23,28 @@ export default function App() {
           displaySurface: 'monitor',
         },
         audio: false,
-        // Prevent Chrome from showing "Switch to this tab" button
         surfaceSwitching: 'exclude',
-        // Prevent sharing the Tilt tab itself (encourage picking another source)
         selfBrowserSurface: 'exclude',
       });
 
       setScreenStream(stream);
       setIsSharing(true);
 
-      // Aggressively refocus back to Tilt tab after sharing starts
-      // Chrome auto-switches to the shared tab — we need to pull user back
-      window.focus();
-      setTimeout(() => window.focus(), 300);
-      setTimeout(() => window.focus(), 800);
+      // Open the floating PiP palette automatically
+      // Small delay to let the screen share settle
+      setTimeout(async () => {
+        const pip = await openFloatingPalette(captureContextRef.current);
+        if (!pip) {
+          // Fallback: refocus Tilt tab and use in-tab palette
+          window.focus();
+        }
+      }, 500);
 
       // Listen for when user stops sharing via browser UI
       stream.getVideoTracks()[0].addEventListener('ended', () => {
         setScreenStream(null);
         setIsSharing(false);
-        setIsTabAway(false);
+        closeFloatingPalette();
       });
     } catch (err) {
       console.log('Screen share cancelled or denied:', err.message);
@@ -51,32 +57,35 @@ export default function App() {
     }
     setScreenStream(null);
     setIsSharing(false);
-    setIsTabAway(false);
+    closeFloatingPalette();
   }, [screenStream]);
 
-  // Detect when user navigates away from Tilt tab
+  // Update PiP palette context periodically
   useEffect(() => {
     if (!isSharing) return;
-
-    const handleVisibility = () => {
-      if (document.hidden) {
-        setIsTabAway(true);
-      } else {
-        setIsTabAway(false);
+    const interval = setInterval(() => {
+      if (isPipOpen()) {
+        renderPalette(captureContextRef.current);
       }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
+    }, 8000);
+    return () => clearInterval(interval);
   }, [isSharing]);
 
-  // Global keyboard shortcut: Cmd+K / Ctrl+K
+  // Cmd+K: open floating palette if PiP supported, else open in-tab palette
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         if (isSharing) {
-          setPaletteOpen((prev) => !prev);
+          if (pipSupported) {
+            // Try to open or focus the floating palette
+            if (!isPipOpen()) {
+              openFloatingPalette(captureContextRef.current);
+            }
+          } else {
+            // Fallback: in-tab palette
+            setPaletteOpen((prev) => !prev);
+          }
         }
       }
       if (e.key === 'Escape' && paletteOpen) {
@@ -86,7 +95,17 @@ export default function App() {
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isSharing, paletteOpen]);
+  }, [isSharing, paletteOpen, pipSupported]);
+
+  const handleOpenPalette = useCallback(async () => {
+    if (pipSupported) {
+      if (!isPipOpen()) {
+        await openFloatingPalette(captureContextRef.current);
+      }
+    } else {
+      setPaletteOpen(true);
+    }
+  }, [pipSupported]);
 
   return (
     <div className="w-full h-screen bg-[#050505] overflow-hidden" data-testid="app-root">
@@ -96,17 +115,14 @@ export default function App() {
         <ScreenShareView
           stream={screenStream}
           onStop={stopScreenShare}
-          onOpenPalette={() => setPaletteOpen(true)}
+          onOpenPalette={handleOpenPalette}
           captureContextRef={captureContextRef}
-          isTabAway={isTabAway}
         />
       )}
 
-      {/* Return-to-Tilt banner shown when sharing but user is on another tab */}
-      <ReturnBanner visible={isSharing && isTabAway} />
-
+      {/* Fallback in-tab palette for browsers without Document PiP */}
       <CommandPalette
-        isOpen={paletteOpen}
+        isOpen={paletteOpen && !pipSupported}
         onClose={() => setPaletteOpen(false)}
         screenContext={captureContextRef.current}
       />
