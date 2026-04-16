@@ -426,8 +426,11 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
       {/* Content */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
-        {/* Screen context — compact, purposeful */}
-        {hasCtx && !guideActive && messages.length === 0 && !loading && (
+        {/* Screen context — visible in both tabs when empty */}
+        {hasCtx && !guideActive && (
+          (mode === 'tilt' && tiltMessages.length === 0 && !loading) ||
+          (mode === 'decide' && decideMessages.length === 0 && !loading && !decisions)
+        ) && (
           <div data-testid="pip-screen-context" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(99,102,241,0.04)', borderRadius: '8px', padding: '6px 10px', border: '1px solid rgba(99,102,241,0.06)' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(129,140,248,0.5)" strokeWidth="2" style={{ flexShrink: 0 }}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
