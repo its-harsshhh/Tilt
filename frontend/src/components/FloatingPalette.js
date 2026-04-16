@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { getPreferredStyle, getInsightText, getMemory, saveDecision } from '../hooks/useMemory';
+import { getPreferredStyle, getInsightText, getMemory, saveDecision, logQuery, getWelcomeContext, getPersonalizedPills } from '../hooks/useMemory';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -218,6 +218,7 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
   const sendTilt = useCallback(async (text) => {
     if (!text.trim() || submittingRef.current) return;
     submittingRef.current = true;
+    logQuery(text.trim());
     setTiltMessages(prev => [...prev, { role: 'user', content: text.trim(), id: Date.now() }]);
     setInput(''); setLoading(true); setError(null);
     const memory = getMemory(); const pref = getPreferredStyle();
@@ -269,9 +270,9 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
     if (!text.trim() || submittingRef.current) return;
     submittingRef.current = true;
     if (modifier) {
-      // Context pill refinement — show the pill as user message
       setDecideMessages(prev => [...prev, { role: 'user', content: modifier, id: Date.now() }]);
     } else {
+      logQuery(text.trim());
       setDecideMessages(prev => [...prev, { role: 'user', content: text.trim(), id: Date.now() }]);
       setLastDecideInput(text.trim());
     }
@@ -440,32 +441,88 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
         )}
 
         {/* ====== TILT TAB — empty state ====== */}
-        {mode === 'tilt' && messages.length === 0 && !loading && !guideActive && (
+        {mode === 'tilt' && messages.length === 0 && !loading && !guideActive && (() => {
+          const welcome = getWelcomeContext();
+          const personalPills = getPersonalizedPills();
+          return (
           <div style={{ padding: '12px 0 0' }}>
+            {welcome && (welcome.lastActivities || welcome.lastQueries) && (
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', padding: '8px 12px', marginBottom: '12px' }} data-testid="welcome-back">
+                <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255,255,255,0.18)', margin: '0 0 5px' }}>
+                  Last session ({welcome.timeLabel})
+                </p>
+                {welcome.lastActivities && (
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', margin: '0 0 3px' }}>
+                    You were on: {welcome.lastActivities.join(', ')}
+                  </p>
+                )}
+                {welcome.lastQueries && welcome.lastQueries.length > 0 && (
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', margin: 0, fontStyle: 'italic' }}>
+                    Asked: &ldquo;{welcome.lastQueries[welcome.lastQueries.length - 1]}&rdquo;
+                  </p>
+                )}
+              </div>
+            )}
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', fontWeight: '500', margin: '0 0 4px', lineHeight: '1.4' }}>
               {hasCtx ? 'I can see your screen.' : 'Your AI co-pilot.'}
             </p>
             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)', margin: '0 0 14px' }}>
               {hasCtx ? 'Ask me anything or pick a prompt below.' : 'Share your screen and ask anything.'}
             </p>
+            {personalPills.length > 0 && (
+              <>
+                <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(129,140,248,0.35)', margin: '0 0 6px' }}>Based on your history</p>
+                <Pills items={personalPills} onSelect={(p) => handlePillSelect(p)} testPrefix="personal" />
+                <div style={{ height: '10px' }} />
+              </>
+            )}
             <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.2)', margin: '0 0 8px' }}>Try asking</p>
             <Pills items={getPills(TILT_PILLS_BY_ACTIVITY, screenActivity)} onSelect={(p) => handlePillSelect(p)} testPrefix="tilt" />
           </div>
-        )}
+          );
+        })()}
 
         {/* ====== DECIDE TAB — empty state ====== */}
-        {mode === 'decide' && decideMessages.length === 0 && !loading && !decisions && (
+        {mode === 'decide' && decideMessages.length === 0 && !loading && !decisions && (() => {
+          const welcome = getWelcomeContext();
+          const personalPills = getPersonalizedPills();
+          return (
           <div style={{ padding: '12px 0 0' }}>
+            {welcome && (welcome.lastActivities || welcome.lastQueries) && (
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', padding: '8px 12px', marginBottom: '12px' }} data-testid="welcome-back-decide">
+                <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'rgba(255,255,255,0.18)', margin: '0 0 5px' }}>
+                  Last session ({welcome.timeLabel})
+                </p>
+                {welcome.lastActivities && (
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', margin: '0 0 3px' }}>
+                    You were on: {welcome.lastActivities.join(', ')}
+                  </p>
+                )}
+                {welcome.lastQueries && welcome.lastQueries.length > 0 && (
+                  <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.25)', margin: 0, fontStyle: 'italic' }}>
+                    Asked: &ldquo;{welcome.lastQueries[welcome.lastQueries.length - 1]}&rdquo;
+                  </p>
+                )}
+              </div>
+            )}
             <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.6)', fontWeight: '500', margin: '0 0 4px', lineHeight: '1.4' }}>
               Get Safe, Smart & Bold options.
             </p>
             <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.2)', margin: '0 0 14px' }}>
               Describe a situation and I'll give you 3 ways to handle it.
             </p>
+            {personalPills.length > 0 && (
+              <>
+                <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(129,140,248,0.35)', margin: '0 0 6px' }}>Based on your history</p>
+                <Pills items={personalPills} onSelect={(p) => handlePillSelect(p)} testPrefix="personal-d" />
+                <div style={{ height: '10px' }} />
+              </>
+            )}
             <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.2)', margin: '0 0 8px' }}>Quick prompts</p>
             <Pills items={getPills(DECIDE_PILLS_BY_ACTIVITY, screenActivity)} onSelect={(p) => handlePillSelect(p)} testPrefix="decide" />
           </div>
-        )}
+          );
+        })()}
 
         {/* Guide header */}
         {guideActive && guideResult && (
