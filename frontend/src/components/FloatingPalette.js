@@ -93,17 +93,24 @@ function InsightLayer({ insights }) {
 }
 
 export default function FloatingPalette({ screenContext, captureFrameFn, micFns, collapsed, onCollapse, onExpand }) {
-  if (collapsed) {
-    return (
-      <div data-testid="floating-palette-collapsed" onClick={onExpand} style={{
-        width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(15,23,42,0.95)', cursor: 'pointer',
-      }}>
-        <img src={TILT_ICON_DATA_URI} alt="Tilt" style={{ width: '32px', height: 'auto', opacity: 0.9 }} />
+  return (
+    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
+      {/* Collapsed overlay — icon on top */}
+      {collapsed && (
+        <div data-testid="floating-palette-collapsed" onClick={onExpand} style={{
+          position: 'absolute', inset: 0, zIndex: 50,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(15,23,42,0.95)', cursor: 'pointer',
+        }}>
+          <img src={TILT_ICON_DATA_URI} alt="Tilt" style={{ width: '32px', height: 'auto', opacity: 0.9 }} />
+        </div>
+      )}
+      {/* Expanded always mounted — hidden behind collapsed overlay when minimized */}
+      <div style={{ width: '100%', height: '100%', visibility: collapsed ? 'hidden' : 'visible' }}>
+        <PaletteExpanded screenContext={screenContext} captureFrameFn={captureFrameFn} micFns={micFns} onCollapse={onCollapse} />
       </div>
-    );
-  }
-  return <PaletteExpanded screenContext={screenContext} captureFrameFn={captureFrameFn} micFns={micFns} onCollapse={onCollapse} />;
+    </div>
+  );
 }
 
 function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) {
