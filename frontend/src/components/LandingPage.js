@@ -21,7 +21,7 @@ export default function LandingPage({ onStartScreenShare }) {
 
       {/* Top-left logo */}
       <div className="absolute top-6 left-7 z-20" data-testid="tilt-logo">
-        <img src="/tilt-logo.svg" alt="Tilt" className="h-7 drop-shadow-[0_2px_12px_rgba(0,0,0,0.15)]" />
+        <img src="/tilt-logo-dark.svg" alt="Tilt" className="h-7" />
       </div>
 
       {/* Content */}
