@@ -43,8 +43,12 @@ function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) 
   const [guideSteps, setGuideSteps] = useState([]);
   const [guideResult, setGuideResult] = useState(null);
   const [annotatedImage, setAnnotatedImage] = useState(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const guideIntervalRef = useRef(null);
   const inputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   // Active messages based on mode
   const messages = mode === 'tilt' ? tiltMessages : decideMessages;
@@ -272,6 +276,55 @@ function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) 
     }
   };
 
+  // Voice recording
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (blob.size < 1000) { setError('Recording too short'); return; }
+        setTranscribing(true);
+        try {
+          const form = new FormData();
+          form.append('file', blob, 'voice.webm');
+          const res = await fetch(`${API_URL}/api/transcribe`, { method: 'POST', body: form });
+          if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Transcription failed'); }
+          const data = await res.json();
+          if (data.text && data.text.trim()) {
+            setInput(data.text.trim());
+            // Auto-submit after a brief moment so user sees the text
+            setTimeout(() => {
+              if (mode === 'decide') sendDecide(data.text.trim());
+              else sendTilt(data.text.trim());
+            }, 300);
+          }
+        } catch (err) { setError(err.message); }
+        finally { setTranscribing(false); }
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+    } catch (err) {
+      setError('Microphone access denied');
+    }
+  }, [mode, sendTilt, sendDecide]);
+
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    setRecording(false);
+  }, []);
+
+  const toggleRecording = useCallback(() => {
+    if (recording) stopRecording();
+    else startRecording();
+  }, [recording, startRecording, stopRecording]);
+
   const switchMode = (m) => {
     if (m !== 'tilt' && guideActive) stopGuide();
     setMode(m); setDecisions(null); setActiveIdx(-1);
@@ -472,29 +525,49 @@ function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) 
         )}
       </div>
 
-      {/* Input — always at bottom, ONLY source of Enter submit */}
+      {/* Input — always at bottom */}
       <div style={{ padding: '6px 12px 10px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(2,6,23,0.95)' }}>
         <div style={{
           background: 'linear-gradient(180deg, rgba(51,65,85,0.5) 0%, rgba(30,41,59,0.6) 100%)',
           backdropFilter: 'blur(24px)', border: '1px solid rgba(148,163,184,0.12)',
-          borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 6px 3px 14px',
+          borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 6px 3px 14px',
         }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.4)" strokeWidth="2" style={{ flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)}
-            placeholder={messages.length > 0 || guideActive ? 'Continue...' : mode === 'decide' ? 'Describe the situation...' : 'Ask anything or say "help me do X"...'}
-            data-testid="pip-decision-input" disabled={loading}
+            placeholder={transcribing ? 'Transcribing...' : recording ? 'Listening...' : messages.length > 0 || guideActive ? 'Continue...' : mode === 'decide' ? 'Describe the situation...' : 'Ask anything or say "help me do X"...'}
+            data-testid="pip-decision-input" disabled={loading || recording || transcribing}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !decisions && input.trim()) {
                 e.preventDefault();
-                e.stopPropagation(); // prevent parent onKeyDown from also firing
+                e.stopPropagation();
                 handleSubmit();
               }
             }}
-            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f1f5f9', fontSize: '14px', fontFamily: "'Inter', sans-serif", padding: '9px 0', opacity: loading ? 0.4 : 1 }}
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f1f5f9', fontSize: '14px', fontFamily: "'Inter', sans-serif", padding: '9px 0', opacity: (loading || transcribing) ? 0.4 : 1 }}
           />
-          {input.trim() && !loading && (
+          {/* Mic button */}
+          <button onClick={toggleRecording} data-testid="pip-mic-btn" disabled={loading || transcribing}
+            style={{
+              width: '32px', height: '32px', borderRadius: '50%', border: 'none', cursor: 'pointer',
+              background: recording ? 'rgba(239,68,68,0.3)' : transcribing ? 'rgba(129,140,248,0.15)' : 'rgba(255,255,255,0.06)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              transition: 'all 0.2s',
+              animation: recording ? 'pulse 1s infinite' : 'none',
+            }}>
+            {transcribing ? (
+              <div style={{ width: '14px', height: '14px', border: '2px solid rgba(129,140,248,0.4)', borderTopColor: '#818cf8', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeWidth="2"
+                stroke={recording ? '#ef4444' : 'rgba(255,255,255,0.4)'} style={{ transition: 'stroke 0.2s' }}>
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            )}
+          </button>
+          {input.trim() && !loading && !recording && !transcribing && (
             <button onClick={handleSubmit} data-testid="pip-submit-btn" style={{
               background: 'rgba(129,140,248,0.2)', border: '1px solid rgba(129,140,248,0.15)',
               borderRadius: '8px', padding: '5px 12px', cursor: 'pointer',
@@ -508,6 +581,7 @@ function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) 
       <style>{`
         @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );

@@ -8,11 +8,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+from emergentintegrations.llm.openai import OpenAISpeechToText
 
 app = FastAPI(title="Tilt API")
 
@@ -87,6 +88,40 @@ class TiltRequest(BaseModel):
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.post("/api/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    if not EMERGENT_KEY:
+        raise HTTPException(status_code=500, detail="LLM key not configured")
+
+    try:
+        stt = OpenAISpeechToText(api_key=EMERGENT_KEY)
+        audio_bytes = await file.read()
+
+        # Write to temp file with correct extension
+        suffix = ".webm"
+        if file.filename:
+            ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "webm"
+            if ext in ("mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm"):
+                suffix = f".{ext}"
+
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp.write(audio_bytes)
+            tmp_path = tmp.name
+
+        with open(tmp_path, "rb") as audio_file:
+            response = await stt.transcribe(
+                file=audio_file,
+                model="whisper-1",
+                response_format="json",
+            )
+
+        os.unlink(tmp_path)
+        return {"text": response.text, "status": "ok"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
 
 
 @app.post("/api/analyze-screen")
