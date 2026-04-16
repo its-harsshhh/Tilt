@@ -1,12 +1,32 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Circle, MonitorOff, Command } from 'lucide-react';
 
-export default function ScreenShareView({ stream, onStop, onOpenPalette, captureContextRef }) {
+export default function ScreenShareView({ stream, onStop, onOpenPalette, captureContextRef, isTabAway }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [contextLabel, setContextLabel] = useState('Observing');
+  const [showReturnHint, setShowReturnHint] = useState(false);
+  const [justReturned, setJustReturned] = useState(false);
   const intervalRef = useRef(null);
+  const wasAwayRef = useRef(false);
+
+  // Detect when user returns from another tab — show a prominent hint
+  useEffect(() => {
+    if (isTabAway) {
+      wasAwayRef.current = true;
+    } else if (wasAwayRef.current) {
+      // User just returned to Tilt tab
+      wasAwayRef.current = false;
+      setJustReturned(true);
+      setShowReturnHint(true);
+      const t = setTimeout(() => {
+        setShowReturnHint(false);
+        setJustReturned(false);
+      }, 4000);
+      return () => clearTimeout(t);
+    }
+  }, [isTabAway]);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -140,6 +160,28 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
           </span>
         </button>
       </div>
+
+      {/* Welcome back hint — shows when user returns from another tab */}
+      {showReturnHint && (
+        <div className="absolute inset-0 z-[60] flex items-center justify-center pointer-events-none animate-fade-in" data-testid="return-hint-overlay">
+          <div className="glass-surface rounded-3xl px-10 py-8 text-center max-w-md pointer-events-auto animate-zoom-in">
+            <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center mx-auto mb-4">
+              <Command size={18} className="text-white/70" />
+            </div>
+            <p className="font-heading text-xl font-light text-white mb-2">Welcome back</p>
+            <p className="font-body text-sm text-white/40 mb-5">
+              Press <span className="font-mono text-white/70 bg-white/10 px-2 py-0.5 rounded-md text-xs">Cmd + K</span> here to open the decision palette
+            </p>
+            <button
+              onClick={() => { setShowReturnHint(false); onOpenPalette(); }}
+              data-testid="open-palette-from-hint"
+              className="px-5 py-2.5 rounded-xl bg-white text-black font-body font-medium text-sm hover:scale-[1.02] active:scale-[0.98] transition-all"
+            >
+              Open Decision Palette
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
