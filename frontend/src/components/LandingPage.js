@@ -1,49 +1,50 @@
 import React from 'react';
 import { Command } from 'lucide-react';
 
-const SKY_BG = 'https://images.unsplash.com/photo-1613742631162-cdba058776b9?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1920&h=1080&fit=crop';
-
 export default function LandingPage({ onStartScreenShare }) {
   return (
     <div
       className="relative w-full h-screen flex flex-col overflow-hidden"
       data-testid="landing-page"
     >
-      {/* Sky background image */}
+      {/* Background image */}
       <div className="absolute inset-0">
         <img
-          src={SKY_BG}
+          src="/hero-bg.jpg"
           alt=""
-          className="w-full h-[70%] object-cover"
-          style={{ objectPosition: '50% 60%' }}
+          className="w-full h-full object-cover"
+          style={{ objectPosition: '50% 35%' }}
         />
-        {/* White gradient fade */}
-        <div className="absolute inset-0 bg-gradient-to-t from-white from-[30%] via-white/60 via-[50%] to-transparent to-[75%]" />
+        {/* White gradient fade from bottom */}
+        <div className="absolute inset-0 bg-gradient-to-t from-white from-[20%] via-white/50 via-[45%] to-transparent to-[70%]" />
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pt-0">
-        {/* Logo — on the sky */}
-        <div className="mb-6" data-testid="tilt-logo">
-          <img src="/tilt-logo.svg" alt="Tilt" className="h-8 drop-shadow-[0_1px_8px_rgba(0,0,0,0.1)]" />
+      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6">
+        {/* Logo */}
+        <div className="mb-7" data-testid="tilt-logo">
+          <img src="/tilt-logo.svg" alt="Tilt" className="h-8 drop-shadow-[0_2px_12px_rgba(0,0,0,0.15)]" />
         </div>
 
-        {/* Headline — on the sky/cloud zone */}
+        {/* Headline — Instrument Serif */}
         <h1
-          className="font-heading text-5xl md:text-[4.5rem] font-bold tracking-tight leading-[1.1] text-white text-center mb-6"
-          style={{ textShadow: '0 2px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.06)' }}
+          className="text-5xl md:text-[4.8rem] leading-[1.1] text-white text-center mb-6"
+          style={{
+            fontFamily: "'Instrument Serif', serif",
+            textShadow: '0 2px 24px rgba(0,0,0,0.2), 0 1px 6px rgba(0,0,0,0.1)',
+          }}
           data-testid="landing-headline"
         >
           Decide better.<br />
-          <span className="text-white/80">Not faster.</span>
+          <span className="text-white/75">Not faster.</span>
         </h1>
 
-        {/* Subheading — transition zone */}
+        {/* Subheading */}
         <p className="font-body text-base md:text-lg text-slate-500 max-w-lg text-center mb-9 leading-relaxed">
           AI that understands what you're doing and helps you choose — without taking over.
         </p>
 
-        {/* CTA Button — on white */}
+        {/* CTA Button */}
         <button
           onClick={onStartScreenShare}
           data-testid="start-screen-share-btn"
@@ -54,7 +55,7 @@ export default function LandingPage({ onStartScreenShare }) {
           Start Decision Layer
         </button>
 
-        {/* Hint — on white */}
+        {/* Hint */}
         <div className="mt-7 flex flex-col items-center gap-2">
           <p className="font-body text-[13px] text-slate-400 leading-relaxed">
             Share your screen once. Call it anytime with{' '}
