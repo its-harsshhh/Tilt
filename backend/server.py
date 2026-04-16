@@ -1,6 +1,8 @@
 import os
 import json
 import uuid
+import base64
+import tempfile
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -10,7 +12,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
 
 app = FastAPI(title="Tilt API")
 
@@ -39,9 +41,73 @@ class DecisionResponse(BaseModel):
     reasoning: dict
 
 
+class ScreenAnalysisRequest(BaseModel):
+    image_base64: str
+
+
+class ScreenAnalysisResponse(BaseModel):
+    context: str
+    activity: str
+
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.post("/api/analyze-screen")
+async def analyze_screen(request: ScreenAnalysisRequest):
+    if not EMERGENT_KEY:
+        raise HTTPException(status_code=500, detail="LLM key not configured")
+
+    try:
+        image_data = request.image_base64
+        if "," in image_data:
+            image_data = image_data.split(",", 1)[1]
+
+        session_id = f"tilt-vision-{uuid.uuid4().hex[:8]}"
+
+        chat = LlmChat(
+            api_key=EMERGENT_KEY,
+            session_id=session_id,
+            system_message="You analyze screenshots to understand user context. Respond with ONLY valid JSON, no markdown.",
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+        image_content = ImageContent(image_base64=image_data)
+
+        user_message = UserMessage(
+            text="""Analyze this screenshot. Describe in 1-2 concise sentences:
+1. What application or website the user is on
+2. What content they are viewing or working on
+3. What action they might need help with
+
+Respond as JSON only:
+{"context": "1-2 sentence description of what user is doing", "activity": "one word like Email, Code, Chat, Document, Browse, Social, Calendar, Shopping"}""",
+            file_contents=[image_content],
+        )
+
+        raw_response = await chat.send_message(user_message)
+
+        cleaned = raw_response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+
+        result = json.loads(cleaned)
+        return ScreenAnalysisResponse(
+            context=result.get("context", "Unable to analyze screen"),
+            activity=result.get("activity", "Unknown"),
+        )
+
+    except json.JSONDecodeError:
+        return ScreenAnalysisResponse(
+            context="Screen captured but analysis unclear",
+            activity="Unknown",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Screen analysis failed: {str(e)}")
 
 
 @app.post("/api/generate-decisions")

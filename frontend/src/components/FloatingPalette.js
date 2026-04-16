@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { getPreferredStyle, getInsightText, getMemory, saveDecision } from '../hooks/useMemory';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
-const LOGO_URL = window.location.origin + '/tilt-logo.svg';
 
 export default function FloatingPalette({ screenContext }) {
   const [input, setInput] = useState('');
@@ -11,6 +10,7 @@ export default function FloatingPalette({ screenContext }) {
   const [selectedType, setSelectedType] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -21,6 +21,7 @@ export default function FloatingPalette({ screenContext }) {
     if (!input.trim()) return;
     setPhase('loading');
     setError(null);
+    setActiveIdx(-1);
     const memory = getMemory();
     const preferred = getPreferredStyle();
     try {
@@ -41,6 +42,10 @@ export default function FloatingPalette({ screenContext }) {
       const data = await res.json();
       setDecisions(data);
       setPhase('decisions');
+      // Pre-highlight preferred option
+      const types = ['safe', 'smart', 'bold'];
+      const prefIdx = types.indexOf(preferred);
+      setActiveIdx(prefIdx >= 0 ? prefIdx : 1);
     } catch (err) {
       setError(err.message);
       setPhase('input');
@@ -67,6 +72,29 @@ export default function FloatingPalette({ screenContext }) {
   const handleReset = () => {
     setPhase('input'); setInput(''); setDecisions(null);
     setSelectedType(null); setError(null); setCopied(false);
+    setActiveIdx(-1);
+  };
+
+  // Keyboard navigation for decision rows
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && phase === 'input') {
+      e.preventDefault();
+      handleSubmit();
+      return;
+    }
+    if (phase === 'decisions') {
+      const types = ['safe', 'smart', 'bold'];
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIdx(prev => Math.min(prev + 1, 2));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIdx(prev => Math.max(prev - 1, 0));
+      } else if (e.key === 'Enter' && activeIdx >= 0) {
+        e.preventDefault();
+        handleSelect(types[activeIdx]);
+      }
+    }
   };
 
   const insight = getInsightText();
@@ -78,15 +106,46 @@ export default function FloatingPalette({ screenContext }) {
     bold:  { bg: 'rgba(255,255,255,0.10)', border: 'rgba(255,255,255,0.15)', accent: '#fbbf24', tag: 'Bold' },
   };
 
+  const hasRealContext = screenContext && screenContext !== 'Observing...' && screenContext.length > 15;
+
   return (
     <div data-testid="floating-palette" style={{
       fontFamily: "'Inter', -apple-system, sans-serif",
       background: 'linear-gradient(180deg, rgba(15,23,42,0.97) 0%, rgba(2,6,23,0.99) 100%)',
       color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column',
-    }}>
-      {/* ── Spotlight Search Bar ── */}
+    }} onKeyDown={handleKeyDown} tabIndex={-1}>
+
+      {/* Screen Context Banner */}
+      {hasRealContext && phase === 'input' && (
+        <div style={{
+          padding: '10px 16px 0',
+        }}>
+          <div data-testid="pip-screen-context" style={{
+            display: 'flex', alignItems: 'flex-start', gap: '8px',
+            background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.1)',
+            borderRadius: '10px', padding: '8px 12px',
+          }}>
+            <div style={{
+              width: '6px', height: '6px', borderRadius: '50%', background: '#818cf8',
+              marginTop: '5px', flexShrink: 0, animation: 'pulse 2s infinite',
+            }} />
+            <div style={{ flex: 1 }}>
+              <span style={{
+                fontSize: '9px', fontWeight: '600', textTransform: 'uppercase',
+                letterSpacing: '0.08em', color: 'rgba(129,140,248,0.5)',
+              }}>Screen Context</span>
+              <p style={{
+                fontSize: '11px', color: 'rgba(255,255,255,0.4)', lineHeight: '1.5',
+                margin: '2px 0 0', wordBreak: 'break-word',
+              }}>{screenContext}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Spotlight Search Bar */}
       <div style={{
-        padding: '16px 16px 0', position: 'sticky', top: 0, zIndex: 10,
+        padding: '12px 16px 0', position: 'sticky', top: 0, zIndex: 10,
       }}>
         <div style={{
           background: 'linear-gradient(180deg, rgba(51,65,85,0.6) 0%, rgba(30,41,59,0.7) 100%)',
@@ -98,20 +157,18 @@ export default function FloatingPalette({ screenContext }) {
           display: 'flex', alignItems: 'center', gap: '10px',
           padding: '4px 6px 4px 16px',
         }}>
-          {/* Search icon */}
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(148,163,184,0.5)" strokeWidth="2" style={{ flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
 
-          {/* Input */}
           <input
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="What do you want to do here?"
+            placeholder={hasRealContext ? "What do you need help with?" : "Describe your situation..."}
             data-testid="pip-decision-input"
             onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); }
+              if (e.key === 'Enter' && phase === 'input') { e.preventDefault(); handleSubmit(); }
             }}
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
@@ -120,7 +177,6 @@ export default function FloatingPalette({ screenContext }) {
             }}
           />
 
-          {/* Submit pill */}
           {input.trim() && phase === 'input' && (
             <button onClick={handleSubmit} data-testid="pip-submit-btn" style={{
               background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.08)',
@@ -128,7 +184,7 @@ export default function FloatingPalette({ screenContext }) {
               color: 'rgba(255,255,255,0.6)', fontSize: '12px', fontFamily: "'Inter', sans-serif",
               fontWeight: '500', whiteSpace: 'nowrap', transition: 'all 0.15s',
             }}>
-              Return ↵
+              Return
             </button>
           )}
 
@@ -147,10 +203,10 @@ export default function FloatingPalette({ screenContext }) {
         )}
       </div>
 
-      {/* ── Results Area ── */}
+      {/* Results Area */}
       <div style={{ flex: 1, padding: '12px 16px 16px', overflowY: 'auto' }}>
 
-        {/* Insight chip */}
+        {/* Reflection Layer — insight chip */}
         {insight && phase === 'input' && (
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px',
@@ -166,9 +222,11 @@ export default function FloatingPalette({ screenContext }) {
 
         {/* Empty state */}
         {phase === 'input' && !input.trim() && (
-          <div style={{ textAlign: 'center', padding: '32px 0' }}>
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.15)', lineHeight: '1.6' }}>
-              Paste a message, describe a situation,<br />or ask how to respond.
+              {hasRealContext
+                ? 'Ask anything about what you see on screen.'
+                : 'Paste a message, describe a situation,\nor ask how to respond.'}
             </p>
           </div>
         )}
@@ -186,24 +244,41 @@ export default function FloatingPalette({ screenContext }) {
           </div>
         )}
 
-        {/* Decision cards — compact rows */}
+        {/* Decision cards — compact rows with keyboard nav */}
         {phase === 'decisions' && decisions && (
           <div data-testid="pip-decision-cards" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {['safe', 'smart', 'bold'].map((type) => {
+            {/* Keyboard nav hint */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', padding: '0 4px',
+            }}>
+              <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)', fontFamily: 'monospace' }}>
+                Use arrow keys to navigate, Enter to select
+              </span>
+            </div>
+            {['safe', 'smart', 'bold'].map((type, idx) => {
               const d = decisions[type];
               const c = cardStyles[type];
               const isPref = type === preferred;
+              const isActive = idx === activeIdx;
               return (
                 <button key={type} onClick={() => handleSelect(type)} data-testid={`pip-card-${type}`}
                   style={{
                     width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
                     padding: '10px 12px', borderRadius: '10px', border: 'none',
-                    background: isPref ? 'rgba(129,140,248,0.08)' : 'transparent',
+                    background: isActive
+                      ? 'rgba(129,140,248,0.12)'
+                      : isPref ? 'rgba(129,140,248,0.06)' : 'transparent',
                     cursor: 'pointer', transition: 'background 0.1s',
                     fontFamily: "'Inter', sans-serif",
+                    outline: isActive ? '1px solid rgba(129,140,248,0.25)' : 'none',
                   }}
-                  onMouseEnter={(e) => { if (!isPref) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                  onMouseLeave={(e) => { if (!isPref) e.currentTarget.style.background = 'transparent'; }}
+                  onMouseEnter={(e) => {
+                    setActiveIdx(idx);
+                    if (!isActive && !isPref) e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive && !isPref) e.currentTarget.style.background = 'transparent';
+                  }}
                 >
                   {/* Tag pill */}
                   <span style={{
@@ -218,6 +293,16 @@ export default function FloatingPalette({ screenContext }) {
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     textAlign: 'left',
                   }}>{d?.response}</span>
+
+                  {/* Preferred badge */}
+                  {isPref && (
+                    <span style={{
+                      fontSize: '8px', fontWeight: '600', color: 'rgba(129,140,248,0.5)',
+                      background: 'rgba(129,140,248,0.08)', padding: '2px 5px',
+                      borderRadius: '4px', flexShrink: 0, textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }} data-testid={`pip-preferred-${type}`}>pref</span>
+                  )}
 
                   {/* Arrow */}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="2" style={{ flexShrink: 0 }}>
@@ -259,7 +344,7 @@ export default function FloatingPalette({ screenContext }) {
                 fontSize: '12px', fontWeight: '500', cursor: 'pointer',
                 fontFamily: "'Inter', sans-serif", transition: 'all 0.15s',
               }}>
-                {copied ? '✓ Copied' : 'Copy'}
+                {copied ? 'Copied' : 'Copy'}
               </button>
               <button onClick={handleReset} data-testid="pip-new-decision-btn" style={{
                 flex: 1, padding: '8px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)',
@@ -267,7 +352,7 @@ export default function FloatingPalette({ screenContext }) {
                 fontSize: '12px', fontWeight: '500', cursor: 'pointer',
                 fontFamily: "'Inter', sans-serif", transition: 'all 0.15s',
               }}>
-                New ↻
+                New
               </button>
             </div>
 

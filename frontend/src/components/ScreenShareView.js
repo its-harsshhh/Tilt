@@ -1,12 +1,17 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Circle, MonitorOff, Command, ExternalLink } from 'lucide-react';
+import { Circle, MonitorOff, Command, ExternalLink, Eye } from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function ScreenShareView({ stream, onStop, onOpenPalette, captureContextRef }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [contextLabel, setContextLabel] = useState('Observing');
+  const [contextLabel, setContextLabel] = useState('Observing...');
+  const [activityType, setActivityType] = useState('Observing');
+  const [analysisCount, setAnalysisCount] = useState(0);
   const intervalRef = useRef(null);
+  const abortRef = useRef(null);
 
   useEffect(() => {
     if (videoRef.current && stream) {
@@ -14,36 +19,63 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
     }
   }, [stream]);
 
-  const captureFrame = useCallback(() => {
+  const captureAndAnalyze = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    canvas.width = 640;
-    canvas.height = 360;
-    ctx.drawImage(video, 0, 0, 640, 360);
+    canvas.width = 1024;
+    canvas.height = 576;
+    ctx.drawImage(video, 0, 0, 1024, 576);
 
-    const labels = ['Writing', 'Browsing', 'Reading', 'Working', 'Composing'];
-    const randomLabel = labels[Math.floor(Math.random() * labels.length)];
-    setContextLabel(randomLabel);
+    const base64 = canvas.toDataURL('image/jpeg', 0.7);
 
     setIsCapturing(true);
-    setTimeout(() => setIsCapturing(false), 800);
 
-    if (captureContextRef) {
-      captureContextRef.current = randomLabel;
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch(`${API_URL}/api/analyze-screen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_base64: base64 }),
+        signal: controller.signal,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const ctx_text = data.context || 'Observing...';
+        const activity = data.activity || 'Observing';
+
+        setContextLabel(ctx_text);
+        setActivityType(activity);
+        setAnalysisCount(prev => prev + 1);
+
+        if (captureContextRef) {
+          captureContextRef.current = ctx_text;
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Screen analysis failed:', err);
+      }
+    } finally {
+      setIsCapturing(false);
     }
   }, [captureContextRef]);
 
   useEffect(() => {
-    intervalRef.current = setInterval(captureFrame, 7000);
-    const initial = setTimeout(captureFrame, 2000);
+    const initial = setTimeout(captureAndAnalyze, 2500);
+    intervalRef.current = setInterval(captureAndAnalyze, 10000);
     return () => {
-      clearInterval(intervalRef.current);
       clearTimeout(initial);
+      clearInterval(intervalRef.current);
+      if (abortRef.current) abortRef.current.abort();
     };
-  }, [captureFrame]);
+  }, [captureAndAnalyze]);
 
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden" data-testid="screen-share-view">
@@ -77,16 +109,25 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
               className={`${isCapturing ? 'text-red-500 animate-pulse' : 'text-green-500'} transition-colors`}
             />
             <span className="font-mono text-[10px] tracking-widest uppercase text-white/60">
-              {isCapturing ? 'Capturing' : 'Active'}
+              {isCapturing ? 'Analyzing' : 'Active'}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="glass-surface rounded-full px-3.5 py-2" data-testid="context-label">
-            <span className="font-mono text-[10px] tracking-widest uppercase text-white/40">
-              Context: <span className="text-white/70">{contextLabel}</span>
-            </span>
+          {/* AI Vision context indicator */}
+          <div className="glass-surface rounded-full px-3.5 py-2 max-w-[300px]" data-testid="context-label">
+            <div className="flex items-center gap-2">
+              <Eye size={11} className="text-indigo-400/60 flex-shrink-0" />
+              <span className="font-mono text-[10px] tracking-wide text-white/40 truncate">
+                <span className="text-indigo-400/70 uppercase">{activityType}</span>
+                {analysisCount > 0 && (
+                  <span className="text-white/20 ml-1.5">
+                    {contextLabel.length > 50 ? contextLabel.slice(0, 50) + '...' : contextLabel}
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
 
           <button
@@ -126,12 +167,12 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
         </button>
       </div>
 
-      {/* Info banner: floating palette opens on top of other windows */}
+      {/* Info banner */}
       <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
         <div className="glass-surface rounded-full px-4 py-2 flex items-center gap-2">
-          <ExternalLink size={11} className="text-blue-400/60" />
+          <Eye size={11} className="text-indigo-400/60" />
           <span className="font-mono text-[9px] tracking-widest uppercase text-white/30">
-            Floating palette opens on top of any window
+            AI vision analyzing your screen every 10s
           </span>
         </div>
       </div>

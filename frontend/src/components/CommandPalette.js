@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Search, Loader2, Shield, Lightbulb, Zap, Copy, Check, RotateCcw } from 'lucide-react';
+import { X, Search, Loader2, Shield, Lightbulb, Zap, Copy, Check, RotateCcw, Eye } from 'lucide-react';
 import { getPreferredStyle, getInsightText, getMemory, saveDecision } from '../hooks/useMemory';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
@@ -11,6 +11,7 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
   const [selectedType, setSelectedType] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const inputRef = useRef(null);
   const insight = getInsightText();
 
@@ -19,13 +20,14 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
     if (!isOpen) {
       setPhase('input'); setInput(''); setDecisions(null);
       setSelectedType(null); setError(null); setCopied(false);
+      setActiveIdx(-1);
     }
   }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!input.trim()) return;
-    setPhase('loading'); setError(null);
+    setPhase('loading'); setError(null); setActiveIdx(-1);
     const memory = getMemory();
     const preferred = getPreferredStyle();
     try {
@@ -41,6 +43,9 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
       const data = await res.json();
       setDecisions(data); setPhase('decisions');
+      const types = ['safe', 'smart', 'bold'];
+      const prefIdx = types.indexOf(preferred);
+      setActiveIdx(prefIdx >= 0 ? prefIdx : 1);
     } catch (err) { setError(err.message); setPhase('input'); }
   };
 
@@ -61,12 +66,29 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
 
   const handleReset = () => {
     setPhase('input'); setInput(''); setDecisions(null);
-    setSelectedType(null); setCopied(false);
+    setSelectedType(null); setCopied(false); setActiveIdx(-1);
     setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  const handleKeyDown = (e) => {
+    if (phase === 'decisions') {
+      const types = ['safe', 'smart', 'bold'];
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveIdx(prev => Math.min(prev + 1, 2));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveIdx(prev => Math.max(prev - 1, 0));
+      } else if (e.key === 'Enter' && activeIdx >= 0) {
+        e.preventDefault();
+        handleSelect(types[activeIdx]);
+      }
+    }
   };
 
   if (!isOpen) return null;
   const preferred = getPreferredStyle();
+  const hasRealContext = screenContext && screenContext !== 'Observing...' && screenContext.length > 15;
   const cardConfig = {
     safe:  { icon: Shield, accent: 'text-slate-400', bg: 'bg-white/[0.03]', border: 'border-white/[0.06]' },
     smart: { icon: Lightbulb, accent: 'text-slate-200', bg: 'bg-white/[0.06]', border: 'border-white/[0.12]' },
@@ -78,12 +100,12 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
       className="fixed inset-0 z-[10000] flex items-start justify-center pt-[15vh]"
       data-testid="command-palette-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={handleKeyDown}
     >
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" />
 
       <div className="relative z-10 w-full max-w-2xl mx-6 animate-zoom-in" data-testid="command-palette-modal">
 
-        {/* ── Spotlight Search Bar ── */}
         <div
           className="rounded-2xl overflow-hidden"
           style={{
@@ -94,6 +116,19 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
             boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.04) inset',
           }}
         >
+          {/* Screen context banner */}
+          {hasRealContext && phase === 'input' && (
+            <div className="px-5 pt-3 pb-1" data-testid="screen-context-banner">
+              <div className="flex items-start gap-2 bg-indigo-500/[0.06] border border-indigo-400/10 rounded-lg px-3 py-2">
+                <Eye size={12} className="text-indigo-400/50 mt-0.5 flex-shrink-0" />
+                <div className="flex-1">
+                  <span className="text-[9px] font-semibold uppercase tracking-wide text-indigo-400/40">Screen Context</span>
+                  <p className="text-[11px] text-white/35 leading-relaxed mt-0.5">{screenContext}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Search input row */}
           <div className="flex items-center gap-3 px-5 py-1">
             <Search size={18} className="text-slate-500 flex-shrink-0" strokeWidth={2} />
@@ -101,17 +136,17 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="What do you want to do here?"
+              placeholder={hasRealContext ? "What do you need help with?" : "What do you want to do here?"}
               data-testid="decision-input"
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+                if (e.key === 'Enter' && !e.shiftKey && phase === 'input') { e.preventDefault(); handleSubmit(); }
               }}
               className="flex-1 bg-transparent border-none text-[15px] text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 py-3.5 font-body"
             />
             {input.trim() && phase === 'input' && (
               <button onClick={handleSubmit} data-testid="submit-decision-btn"
                 className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/[0.08] text-[11px] text-white/50 font-medium font-body hover:bg-white/15 transition-colors">
-                Return ↵
+                Return
               </button>
             )}
             {phase === 'loading' && <Loader2 size={18} className="text-slate-500 animate-spin flex-shrink-0" />}
@@ -123,7 +158,7 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
 
           {error && <p className="px-5 pb-2 text-red-400/80 font-mono text-xs" data-testid="error-message">{error}</p>}
 
-          {/* Insight chip */}
+          {/* Reflection Layer — insight chip */}
           {insight && phase === 'input' && (
             <div className="px-5 pb-3" data-testid="insight-bar">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/[0.08] border border-indigo-400/10">
@@ -146,17 +181,23 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
                 </div>
               )}
 
-              {/* Decision cards — compact rows */}
+              {/* Decision cards — compact rows with keyboard nav */}
               {phase === 'decisions' && decisions && (
                 <div className="flex flex-col gap-0 animate-slide-up" data-testid="decision-cards">
-                  {['safe', 'smart', 'bold'].map((type) => {
+                  <div className="px-3 mb-1">
+                    <span className="text-[9px] text-white/15 font-mono">arrow keys to navigate, Enter to select</span>
+                  </div>
+                  {['safe', 'smart', 'bold'].map((type, idx) => {
                     const c = cardConfig[type]; const Icon = c.icon;
                     const d = decisions[type]; const isPref = type === preferred;
+                    const isActive = idx === activeIdx;
                     return (
                       <button key={type} onClick={() => handleSelect(type)} data-testid={`decision-card-${type}`}
+                        onMouseEnter={() => setActiveIdx(idx)}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
-                          hover:bg-white/[0.05] transition-colors cursor-pointer
-                          ${isPref ? 'bg-indigo-500/[0.06]' : ''}`}>
+                          transition-colors cursor-pointer
+                          ${isActive ? 'bg-indigo-500/[0.1] outline outline-1 outline-indigo-400/20' :
+                            isPref ? 'bg-indigo-500/[0.06]' : 'hover:bg-white/[0.05]'}`}>
                         <Icon size={14} className={c.accent} strokeWidth={1.5} />
                         <span className={`text-[10px] font-semibold uppercase tracking-wide ${c.accent} w-10 text-left flex-shrink-0`}>
                           {d?.label}
