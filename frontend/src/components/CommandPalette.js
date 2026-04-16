@@ -46,18 +46,18 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
     const preferred = getPreferredStyle();
     try {
       const conversation = messages.map(m => ({ role: m.role, content: m.content }));
-      const res = await fetch(`${API_URL}/api/assist`, {
+      const res = await fetch(`${API_URL}/api/tilt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: text.trim(), screen_context: screenContext || null, conversation,
-          mode: 'chat', user_preference: preferred !== 'smart' ? preferred : null,
+          user_preference: preferred !== 'smart' ? preferred : null,
           tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null,
         }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.response, id: Date.now() + 1 }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: data.response || data.instruction || '', id: Date.now() + 1 }]);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); setTimeout(() => inputRef.current?.focus(), 100); }
   }, [messages, screenContext]);
@@ -142,14 +142,10 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
           <div className="flex-shrink-0 px-4 pt-3 pb-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
             <div className="flex items-center gap-3 mb-2">
               <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5 flex-1">
-                <button onClick={() => { setMode('chat'); setDecisions(null); }} data-testid="mode-chat-btn"
+                <button onClick={() => { setMode('chat'); setDecisions(null); }} data-testid="mode-tilt-btn"
                   className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all border-none cursor-pointer ${
                     mode === 'chat' ? 'bg-white/[0.1] text-white/80' : 'bg-transparent text-white/30'}`}
-                  style={{ fontFamily: "'Inter', sans-serif" }}>Assist</button>
-                <button onClick={() => { setMode('guide'); setDecisions(null); }} data-testid="mode-guide-btn"
-                  className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all border-none cursor-pointer ${
-                    mode === 'guide' ? 'bg-white/[0.1] text-white/80' : 'bg-transparent text-white/30'}`}
-                  style={{ fontFamily: "'Inter', sans-serif" }}>Guide</button>
+                  style={{ fontFamily: "'Inter', sans-serif" }}>Tilt</button>
                 <button onClick={() => { setMode('decide'); setDecisions(null); }} data-testid="mode-decide-btn"
                   className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all border-none cursor-pointer ${
                     mode === 'decide' ? 'bg-white/[0.1] text-white/80' : 'bg-transparent text-white/30'}`}
@@ -179,10 +175,8 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
                   </div>
                 )}
                 <p className="text-[13px] text-white/15 leading-relaxed">
-                  {mode === 'guide'
-                    ? 'Guide mode works best in the floating palette.\nOpen it with Cmd+K.'
-                    : mode === 'chat'
-                    ? (hasRealContext ? 'I can see your screen. Ask me anything.' : 'Ask me to help with anything.')
+                  {mode === 'chat'
+                    ? (hasRealContext ? 'I can see your screen. Ask me anything.' : 'Ask me anything or say "help me do X" for guidance.')
                     : 'Describe a situation to get Safe, Smart & Bold options.'}
                 </p>
               </div>

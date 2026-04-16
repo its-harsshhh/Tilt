@@ -5,7 +5,8 @@ Tests for:
 - POST /api/analyze-screen - Screen analysis with Claude vision
 - POST /api/generate-decisions - Decision generation with Claude
 - POST /api/assist - Conversational AI assistant
-- POST /api/guide-step - Step-by-step screen guidance (NEW in iteration 5)
+- POST /api/guide-step - Step-by-step screen guidance
+- POST /api/tilt - Unified Tilt endpoint (NEW in iteration 6) - auto-detects chat vs guide
 """
 import pytest
 import requests
@@ -590,6 +591,259 @@ class TestGuideStepEndpoint:
         assert response2.status_code == 422, f"Expected 422 for missing task, got {response2.status_code}"
         
         print(f"✓ Guide step returns 422 for missing required fields")
+
+
+class TestTiltUnifiedEndpoint:
+    """Unified Tilt endpoint tests - POST /api/tilt (NEW in iteration 6)
+    Auto-detects if user needs chat help or step-by-step guidance
+    """
+    
+    def test_tilt_chat_basic_question(self):
+        """POST /api/tilt with regular question returns {type: 'chat', response: '...'}"""
+        response = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={"message": "What's the best way to write a professional email?"},
+            timeout=60
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        assert "type" in data, "Response missing 'type' field"
+        assert data["type"] == "chat", f"Expected type 'chat', got '{data['type']}'"
+        assert "response" in data, "Response missing 'response' field"
+        assert isinstance(data["response"], str), "response should be a string"
+        assert len(data["response"]) > 0, "response should not be empty"
+        
+        print(f"✓ Tilt endpoint returns chat response for regular question")
+        print(f"  Response: {data['response'][:80]}...")
+    
+    def test_tilt_guide_with_image_and_action_request(self):
+        """POST /api/tilt with guidance request + image returns guide response"""
+        image_base64 = create_test_ui_image_base64()
+        
+        response = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={
+                "message": "How do I delete this repository?",
+                "image_base64": image_base64
+            },
+            timeout=90
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        assert "type" in data, "Response missing 'type' field"
+        assert data["type"] == "guide", f"Expected type 'guide', got '{data['type']}'"
+        assert "instruction" in data, "Response missing 'instruction' field"
+        assert "region" in data, "Response missing 'region' field"
+        assert "is_complete" in data, "Response missing 'is_complete' field"
+        assert "step_summary" in data, "Response missing 'step_summary' field"
+        assert "step_number" in data, "Response missing 'step_number' field"
+        
+        # Verify region structure
+        region = data.get("region", {})
+        assert "x" in region, "Region missing 'x' coordinate"
+        assert "y" in region, "Region missing 'y' coordinate"
+        assert 0 <= region["x"] <= 1, f"x coordinate {region['x']} should be between 0 and 1"
+        assert 0 <= region["y"] <= 1, f"y coordinate {region['y']} should be between 0 and 1"
+        
+        print(f"✓ Tilt endpoint returns guide response for action request with image")
+        print(f"  Instruction: {data['instruction'][:80]}...")
+        print(f"  Region: x={region['x']}, y={region['y']}")
+    
+    def test_tilt_guide_active_continues_guidance(self):
+        """POST /api/tilt with guide_active=true + image continues guidance"""
+        image_base64 = create_test_ui_image_base64()
+        
+        # First step
+        response1 = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={
+                "message": "Help me delete this repository",
+                "image_base64": image_base64
+            },
+            timeout=90
+        )
+        
+        assert response1.status_code == 200
+        data1 = response1.json()
+        assert data1["type"] == "guide"
+        step1_summary = data1.get("step_summary", "Step 1")
+        
+        # Continue with guide_active=true
+        response2 = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={
+                "message": "Help me delete this repository",
+                "image_base64": image_base64,
+                "guide_active": True,
+                "guide_task": "Help me delete this repository",
+                "completed_steps": [step1_summary],
+                "step_number": 2
+            },
+            timeout=90
+        )
+        
+        assert response2.status_code == 200, f"Expected 200, got {response2.status_code}: {response2.text}"
+        data2 = response2.json()
+        
+        assert data2["type"] == "guide", f"Expected type 'guide', got '{data2['type']}'"
+        assert data2["step_number"] == 2, f"Expected step_number 2, got {data2['step_number']}"
+        assert "instruction" in data2
+        assert "region" in data2
+        
+        print(f"✓ Tilt endpoint continues guidance with guide_active=true")
+        print(f"  Step 1: {step1_summary}")
+        print(f"  Step 2: {data2.get('step_summary', 'N/A')}")
+    
+    def test_tilt_chat_with_conversation_history(self):
+        """POST /api/tilt with conversation history works"""
+        # First message
+        response1 = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={"message": "I need help writing a professional email to decline a meeting"},
+            timeout=60
+        )
+        
+        assert response1.status_code == 200
+        data1 = response1.json()
+        assert data1["type"] == "chat"
+        first_response = data1["response"]
+        
+        # Follow-up with conversation history
+        response2 = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={
+                "message": "Can you make it shorter?",
+                "conversation": [
+                    {"role": "user", "content": "I need help writing a professional email to decline a meeting"},
+                    {"role": "assistant", "content": first_response}
+                ]
+            },
+            timeout=60
+        )
+        
+        assert response2.status_code == 200, f"Expected 200, got {response2.status_code}: {response2.text}"
+        data2 = response2.json()
+        
+        assert data2["type"] == "chat", f"Expected type 'chat', got '{data2['type']}'"
+        assert "response" in data2
+        assert len(data2["response"]) > 0
+        
+        print(f"✓ Tilt endpoint supports conversation history")
+        print(f"  First response: {first_response[:60]}...")
+        print(f"  Follow-up response: {data2['response'][:60]}...")
+    
+    def test_tilt_chat_with_screen_context(self):
+        """POST /api/tilt with screen_context uses it in chat response"""
+        response = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={
+                "message": "What should I do next?",
+                "screen_context": "User is viewing a Slack conversation with their manager about a project deadline"
+            },
+            timeout=60
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        assert data["type"] == "chat", f"Expected type 'chat', got '{data['type']}'"
+        assert "response" in data
+        assert len(data["response"]) > 0
+        
+        print(f"✓ Tilt endpoint uses screen_context in chat response")
+        print(f"  Response: {data['response'][:80]}...")
+    
+    def test_tilt_chat_with_preferences(self):
+        """POST /api/tilt with user_preference and tone_traits works"""
+        response = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={
+                "message": "How should I respond to this difficult client email?",
+                "screen_context": "User is viewing an email from a client complaining about service",
+                "user_preference": "bold",
+                "tone_traits": ["Direct", "Confident", "Professional"]
+            },
+            timeout=60
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        assert data["type"] == "chat", f"Expected type 'chat', got '{data['type']}'"
+        assert "response" in data
+        assert len(data["response"]) > 0
+        
+        print(f"✓ Tilt endpoint works with user preferences and tone traits")
+        print(f"  Response: {data['response'][:80]}...")
+    
+    def test_tilt_missing_message(self):
+        """POST /api/tilt should return 422 for missing message"""
+        response = requests.post(
+            f"{BASE_URL}/api/tilt",
+            json={},
+            timeout=30
+        )
+        
+        assert response.status_code == 422, f"Expected 422 for missing field, got {response.status_code}"
+        print(f"✓ Tilt endpoint returns 422 for missing message")
+    
+    def test_tilt_guide_triggers(self):
+        """POST /api/tilt correctly detects guidance requests"""
+        image_base64 = create_test_ui_image_base64()
+        
+        # Test various guidance trigger phrases
+        guide_phrases = [
+            "How do I change the settings?",
+            "Show me how to delete this",
+            "Help me navigate to the profile page",
+            "Where is the logout button?",
+            "I want to update my password",
+        ]
+        
+        for phrase in guide_phrases:
+            response = requests.post(
+                f"{BASE_URL}/api/tilt",
+                json={
+                    "message": phrase,
+                    "image_base64": image_base64
+                },
+                timeout=90
+            )
+            
+            assert response.status_code == 200, f"Failed for phrase '{phrase}': {response.text}"
+            data = response.json()
+            assert data["type"] == "guide", f"Expected 'guide' for '{phrase}', got '{data['type']}'"
+            print(f"  ✓ '{phrase[:40]}...' -> guide")
+        
+        print(f"✓ Tilt endpoint correctly detects guidance requests")
+    
+    def test_tilt_chat_triggers(self):
+        """POST /api/tilt correctly detects chat requests (no image or non-action questions)"""
+        # Test various chat trigger phrases (no image)
+        chat_phrases = [
+            "What's the weather like today?",
+            "Explain quantum computing",
+            "Tell me a joke",
+            "What are the benefits of meditation?",
+        ]
+        
+        for phrase in chat_phrases:
+            response = requests.post(
+                f"{BASE_URL}/api/tilt",
+                json={"message": phrase},
+                timeout=60
+            )
+            
+            assert response.status_code == 200, f"Failed for phrase '{phrase}': {response.text}"
+            data = response.json()
+            assert data["type"] == "chat", f"Expected 'chat' for '{phrase}', got '{data['type']}'"
+            print(f"  ✓ '{phrase[:40]}...' -> chat")
+        
+        print(f"✓ Tilt endpoint correctly detects chat requests")
 
 
 class TestIntegrationFlow:

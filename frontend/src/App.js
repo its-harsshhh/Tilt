@@ -60,14 +60,20 @@ export default function App() {
     closeFloatingPalette();
   }, [screenStream]);
 
-  // Update PiP palette context periodically
+  // Update PiP palette context — only on meaningful changes, not too frequently
+  const lastContextRef = useRef('');
   useEffect(() => {
     if (!isSharing) return;
     const interval = setInterval(() => {
       if (isPipOpen()) {
-        renderPalette(captureContextRef.current);
+        const newCtx = captureContextRef.current;
+        // Only re-render if context changed significantly
+        if (newCtx !== lastContextRef.current) {
+          lastContextRef.current = newCtx;
+          renderPalette(newCtx);
+        }
       }
-    }, 8000);
+    }, 12000); // Less frequent to avoid disruption
     return () => clearInterval(interval);
   }, [isSharing]);
 
