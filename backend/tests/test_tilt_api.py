@@ -4,7 +4,8 @@ Tests for:
 - GET /api/health - Health check endpoint
 - POST /api/analyze-screen - Screen analysis with Claude vision
 - POST /api/generate-decisions - Decision generation with Claude
-- POST /api/assist - Conversational AI assistant (NEW)
+- POST /api/assist - Conversational AI assistant
+- POST /api/guide-step - Step-by-step screen guidance (NEW in iteration 5)
 """
 import pytest
 import requests
@@ -14,6 +15,51 @@ from io import BytesIO
 
 # Use localhost for backend testing to avoid proxy issues with large payloads
 BASE_URL = "http://localhost:8001"
+
+
+def create_test_ui_image_base64():
+    """Create a test image simulating a UI with buttons/elements for guide-step testing"""
+    from PIL import Image, ImageDraw
+    import io
+    
+    # Create 800x600 image simulating a UI
+    img = Image.new('RGB', (800, 600), color=(240, 240, 245))
+    draw = ImageDraw.Draw(img)
+    
+    # Draw a header bar
+    draw.rectangle([0, 0, 800, 50], fill=(30, 30, 40))
+    draw.text((20, 15), "GitHub - Settings", fill=(255, 255, 255))
+    
+    # Draw navigation tabs
+    draw.rectangle([100, 60, 180, 90], fill=(200, 200, 210))
+    draw.text((110, 68), "General", fill=(50, 50, 50))
+    
+    draw.rectangle([190, 60, 280, 90], fill=(100, 100, 200))  # Active tab
+    draw.text((200, 68), "Settings", fill=(255, 255, 255))
+    
+    draw.rectangle([290, 60, 380, 90], fill=(200, 200, 210))
+    draw.text((300, 68), "Security", fill=(50, 50, 50))
+    
+    # Draw sidebar
+    draw.rectangle([0, 100, 150, 600], fill=(245, 245, 250))
+    draw.text((20, 120), "Profile", fill=(80, 80, 80))
+    draw.text((20, 150), "Account", fill=(80, 80, 80))
+    draw.text((20, 180), "Notifications", fill=(80, 80, 80))
+    draw.text((20, 210), "Danger Zone", fill=(200, 50, 50))
+    
+    # Draw main content area
+    draw.rectangle([160, 100, 790, 590], fill=(255, 255, 255))
+    draw.text((180, 120), "Repository Settings", fill=(30, 30, 30))
+    
+    # Draw a delete button in danger zone
+    draw.rectangle([180, 500, 350, 540], fill=(220, 50, 50))
+    draw.text((200, 512), "Delete Repository", fill=(255, 255, 255))
+    
+    # Convert to JPEG base64
+    buffer = io.BytesIO()
+    img.save(buffer, format='JPEG', quality=85)
+    buffer.seek(0)
+    return base64.b64encode(buffer.read()).decode('utf-8')
 
 class TestHealthEndpoint:
     """Health check endpoint tests"""
@@ -367,6 +413,183 @@ class TestGenerateDecisionsEndpoint:
         
         assert response.status_code == 422, f"Expected 422 for missing field, got {response.status_code}"
         print(f"✓ Generate decisions returns 422 for missing input_text")
+
+
+class TestGuideStepEndpoint:
+    """Step-by-step screen guidance endpoint tests - POST /api/guide-step (NEW)"""
+    
+    def test_guide_step_basic(self):
+        """POST /api/guide-step should accept image and task, return guidance"""
+        image_base64 = create_test_ui_image_base64()
+        
+        response = requests.post(
+            f"{BASE_URL}/api/guide-step",
+            json={
+                "image_base64": image_base64,
+                "task": "Delete this repository",
+                "completed_steps": [],
+                "step_number": 1
+            },
+            timeout=90
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        # Verify response structure
+        assert "instruction" in data, "Response missing 'instruction' field"
+        assert "detail" in data, "Response missing 'detail' field"
+        assert "region" in data, "Response missing 'region' field"
+        assert "is_complete" in data, "Response missing 'is_complete' field"
+        assert "step_summary" in data, "Response missing 'step_summary' field"
+        assert "step_number" in data, "Response missing 'step_number' field"
+        
+        print(f"✓ Guide step endpoint returned valid response")
+        print(f"  Instruction: {data['instruction'][:80]}...")
+        print(f"  Region: {data['region']}")
+    
+    def test_guide_step_region_coordinates(self):
+        """POST /api/guide-step should return region with x, y coordinates (0-1 range)"""
+        image_base64 = create_test_ui_image_base64()
+        
+        response = requests.post(
+            f"{BASE_URL}/api/guide-step",
+            json={
+                "image_base64": image_base64,
+                "task": "Click on the Settings tab",
+                "completed_steps": [],
+                "step_number": 1
+            },
+            timeout=90
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        
+        region = data.get("region", {})
+        assert "x" in region, "Region missing 'x' coordinate"
+        assert "y" in region, "Region missing 'y' coordinate"
+        assert "label" in region, "Region missing 'label'"
+        
+        # Verify coordinates are in 0-1 range (normalized)
+        x = region["x"]
+        y = region["y"]
+        assert isinstance(x, (int, float)), f"x should be numeric, got {type(x)}"
+        assert isinstance(y, (int, float)), f"y should be numeric, got {type(y)}"
+        assert 0 <= x <= 1, f"x coordinate {x} should be between 0 and 1"
+        assert 0 <= y <= 1, f"y coordinate {y} should be between 0 and 1"
+        
+        print(f"✓ Guide step returns valid region coordinates")
+        print(f"  x={x}, y={y}, label='{region.get('label', '')}'")
+    
+    def test_guide_step_with_completed_steps(self):
+        """POST /api/guide-step should advance through steps with completed_steps"""
+        image_base64 = create_test_ui_image_base64()
+        
+        # First step
+        response1 = requests.post(
+            f"{BASE_URL}/api/guide-step",
+            json={
+                "image_base64": image_base64,
+                "task": "Delete this repository",
+                "completed_steps": [],
+                "step_number": 1
+            },
+            timeout=90
+        )
+        
+        assert response1.status_code == 200
+        data1 = response1.json()
+        step1_summary = data1.get("step_summary", "Step 1")
+        
+        # Second step with completed_steps
+        response2 = requests.post(
+            f"{BASE_URL}/api/guide-step",
+            json={
+                "image_base64": image_base64,
+                "task": "Delete this repository",
+                "completed_steps": [step1_summary],
+                "step_number": 2
+            },
+            timeout=90
+        )
+        
+        assert response2.status_code == 200, f"Expected 200, got {response2.status_code}: {response2.text}"
+        data2 = response2.json()
+        
+        assert data2["step_number"] == 2, f"Expected step_number 2, got {data2['step_number']}"
+        assert "instruction" in data2
+        
+        print(f"✓ Guide step advances correctly with completed_steps")
+        print(f"  Step 1: {step1_summary}")
+        print(f"  Step 2: {data2.get('step_summary', 'N/A')}")
+    
+    def test_guide_step_is_complete_flag(self):
+        """POST /api/guide-step should return is_complete boolean"""
+        image_base64 = create_test_ui_image_base64()
+        
+        response = requests.post(
+            f"{BASE_URL}/api/guide-step",
+            json={
+                "image_base64": image_base64,
+                "task": "Click the Settings tab",
+                "completed_steps": [],
+                "step_number": 1
+            },
+            timeout=90
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        
+        assert "is_complete" in data, "Response missing 'is_complete' field"
+        assert isinstance(data["is_complete"], bool), f"is_complete should be boolean, got {type(data['is_complete'])}"
+        
+        print(f"✓ Guide step returns is_complete flag: {data['is_complete']}")
+    
+    def test_guide_step_with_data_uri_prefix(self):
+        """POST /api/guide-step should handle base64 with data URI prefix"""
+        image_base64 = create_test_ui_image_base64()
+        image_with_prefix = f"data:image/jpeg;base64,{image_base64}"
+        
+        response = requests.post(
+            f"{BASE_URL}/api/guide-step",
+            json={
+                "image_base64": image_with_prefix,
+                "task": "Navigate to settings",
+                "completed_steps": [],
+                "step_number": 1
+            },
+            timeout=90
+        )
+        
+        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+        data = response.json()
+        assert "instruction" in data
+        assert "region" in data
+        
+        print(f"✓ Guide step handles data URI prefix correctly")
+    
+    def test_guide_step_missing_required_fields(self):
+        """POST /api/guide-step should return 422 for missing required fields"""
+        # Missing image_base64
+        response1 = requests.post(
+            f"{BASE_URL}/api/guide-step",
+            json={"task": "Delete repo"},
+            timeout=30
+        )
+        assert response1.status_code == 422, f"Expected 422 for missing image_base64, got {response1.status_code}"
+        
+        # Missing task
+        image_base64 = create_test_ui_image_base64()
+        response2 = requests.post(
+            f"{BASE_URL}/api/guide-step",
+            json={"image_base64": image_base64},
+            timeout=30
+        )
+        assert response2.status_code == 422, f"Expected 422 for missing task, got {response2.status_code}"
+        
+        print(f"✓ Guide step returns 422 for missing required fields")
 
 
 class TestIntegrationFlow:

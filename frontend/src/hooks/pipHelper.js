@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import FloatingPalette from '../components/FloatingPalette';
 
-// Inject custom styles for the PiP window (spin animation, scrollbar, fonts)
 const PIP_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
@@ -28,15 +27,35 @@ const PIP_STYLES = `
 
 let pipWindowRef = null;
 let pipReactRoot = null;
+let videoElementRef = null;
+
+// Store reference to the screen share video element
+export function setVideoElement(videoEl) {
+  videoElementRef = videoEl;
+}
+
+// Capture frame from the video element (called by Guide mode in PiP)
+function captureFrame() {
+  if (!videoElementRef) return null;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024;
+    canvas.height = 576;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoElementRef, 0, 0, 1024, 576);
+    return canvas.toDataURL('image/jpeg', 0.7);
+  } catch (e) {
+    console.error('Frame capture failed:', e);
+    return null;
+  }
+}
 
 export async function openFloatingPalette(screenContext) {
-  // If PiP already open, focus it
   if (pipWindowRef && !pipWindowRef.closed) {
     pipWindowRef.focus();
     return pipWindowRef;
   }
 
-  // Check for Document PiP support
   if (!('documentPictureInPicture' in window)) {
     alert('Your browser does not support the floating palette. Please use Chrome 116+ for this feature.');
     return null;
@@ -44,32 +63,26 @@ export async function openFloatingPalette(screenContext) {
 
   try {
     const pip = await window.documentPictureInPicture.requestWindow({
-      width: 420,
-      height: 560,
+      width: 440,
+      height: 620,
     });
 
     pipWindowRef = pip;
 
-    // Inject styles
     const style = pip.document.createElement('style');
     style.textContent = PIP_STYLES;
     pip.document.head.appendChild(style);
 
-    // Set title
-    pip.document.title = 'Tilt — Decision Palette';
+    pip.document.title = 'Tilt — AI Assistant';
 
-    // Create React mount point
     const container = pip.document.createElement('div');
     container.id = 'tilt-floating-root';
     pip.document.body.appendChild(container);
 
-    // Create a new React root in the PiP window
     pipReactRoot = ReactDOM.createRoot(container);
 
-    // Render the floating palette
     renderPalette(screenContext);
 
-    // Add Cmd+K listener to the PiP window too (toggles focus to input)
     pip.document.addEventListener('keydown', (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
@@ -78,7 +91,6 @@ export async function openFloatingPalette(screenContext) {
       }
     });
 
-    // Cleanup when PiP closes
     pip.addEventListener('pagehide', () => {
       if (pipReactRoot) {
         pipReactRoot.unmount();
@@ -100,6 +112,7 @@ export function renderPalette(screenContext) {
       <FloatingPalette
         screenContext={screenContext}
         onRequestClose={closeFloatingPalette}
+        captureFrameFn={captureFrame}
       />
     );
   }

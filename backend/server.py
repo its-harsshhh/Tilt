@@ -64,6 +64,13 @@ class AssistRequest(BaseModel):
     tone_traits: Optional[list] = None
 
 
+class GuideStepRequest(BaseModel):
+    image_base64: str
+    task: str
+    completed_steps: Optional[list] = []
+    step_number: Optional[int] = 1
+
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
@@ -122,6 +129,101 @@ Respond as JSON only:
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Screen analysis failed: {str(e)}")
+
+
+@app.post("/api/guide-step")
+async def guide_step(request: GuideStepRequest):
+    if not EMERGENT_KEY:
+        raise HTTPException(status_code=500, detail="LLM key not configured")
+
+    try:
+        image_data = request.image_base64
+        if "," in image_data:
+            image_data = image_data.split(",", 1)[1]
+
+        steps_context = ""
+        if request.completed_steps and len(request.completed_steps) > 0:
+            steps_context = "\n\nSteps already completed:\n" + "\n".join(
+                [f"- Step {i+1}: {s}" for i, s in enumerate(request.completed_steps)]
+            )
+
+        session_id = f"tilt-guide-{uuid.uuid4().hex[:8]}"
+
+        system_prompt = """You are Tilt — a real-time screen guide. You look at the user's screen and guide them through a task step-by-step.
+
+You MUST respond with valid JSON only. No markdown, no explanation outside JSON.
+
+For each step:
+1. Look at the current screenshot carefully
+2. Determine what the user needs to do NEXT (one single action)
+3. Identify the exact UI element they need to interact with
+4. Provide the approximate location of that element as normalized coordinates (0 to 1, where 0,0 is top-left and 1,1 is bottom-right)
+
+Response format:
+{
+  "instruction": "Clear, concise instruction for what to do next (e.g., 'Click the Settings tab in the top navigation bar')",
+  "detail": "Brief explanation of why this step is needed",
+  "region": {
+    "x": 0.85,
+    "y": 0.05,
+    "label": "Settings"
+  },
+  "is_complete": false,
+  "step_summary": "Short label for this step (e.g., 'Open Settings')"
+}
+
+Rules:
+- Give ONE action at a time — never multiple steps
+- Be very specific about which UI element to interact with
+- The region coordinates should point to the CENTER of the target element
+- x is horizontal (0=left, 1=right), y is vertical (0=top, 1=bottom)
+- Set is_complete to true ONLY when the entire task is finished
+- If you can see the task is already done in the screenshot, set is_complete to true"""
+
+        user_prompt = f"""Task the user wants to accomplish: "{request.task}"
+
+Current step number: {request.step_number}{steps_context}
+
+Look at the screenshot and tell the user the NEXT single action to take. Identify where on the screen they need to click/interact."""
+
+        chat = LlmChat(
+            api_key=EMERGENT_KEY,
+            session_id=session_id,
+            system_message=system_prompt,
+        ).with_model("anthropic", "claude-sonnet-4-5-20250929")
+
+        image_content = ImageContent(image_base64=image_data)
+        user_message = UserMessage(text=user_prompt, file_contents=[image_content])
+        raw_response = await chat.send_message(user_message)
+
+        cleaned = raw_response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+
+        result = json.loads(cleaned)
+        return {
+            "instruction": result.get("instruction", ""),
+            "detail": result.get("detail", ""),
+            "region": result.get("region", {"x": 0.5, "y": 0.5, "label": ""}),
+            "is_complete": result.get("is_complete", False),
+            "step_summary": result.get("step_summary", f"Step {request.step_number}"),
+            "step_number": request.step_number,
+        }
+
+    except json.JSONDecodeError:
+        return {
+            "instruction": "Could not determine the next step. Please try describing the task again.",
+            "detail": "",
+            "region": {"x": 0.5, "y": 0.5, "label": ""},
+            "is_complete": False,
+            "step_summary": f"Step {request.step_number}",
+            "step_number": request.step_number,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Guide step failed: {str(e)}")
 
 
 @app.post("/api/assist")

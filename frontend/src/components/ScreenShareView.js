@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Circle, MonitorOff, Command, ExternalLink, Eye } from 'lucide-react';
+import { setVideoElement } from '../hooks/pipHelper';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -16,7 +17,10 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      // Register video element so PiP Guide mode can capture frames
+      setVideoElement(videoRef.current);
     }
+    return () => setVideoElement(null);
   }, [stream]);
 
   const captureAndAnalyze = useCallback(async () => {

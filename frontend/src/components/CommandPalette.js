@@ -146,6 +146,10 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
                   className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all border-none cursor-pointer ${
                     mode === 'chat' ? 'bg-white/[0.1] text-white/80' : 'bg-transparent text-white/30'}`}
                   style={{ fontFamily: "'Inter', sans-serif" }}>Assist</button>
+                <button onClick={() => { setMode('guide'); setDecisions(null); }} data-testid="mode-guide-btn"
+                  className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all border-none cursor-pointer ${
+                    mode === 'guide' ? 'bg-white/[0.1] text-white/80' : 'bg-transparent text-white/30'}`}
+                  style={{ fontFamily: "'Inter', sans-serif" }}>Guide</button>
                 <button onClick={() => { setMode('decide'); setDecisions(null); }} data-testid="mode-decide-btn"
                   className={`flex-1 py-1.5 rounded-md text-[11px] font-semibold transition-all border-none cursor-pointer ${
                     mode === 'decide' ? 'bg-white/[0.1] text-white/80' : 'bg-transparent text-white/30'}`}
@@ -175,7 +179,9 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
                   </div>
                 )}
                 <p className="text-[13px] text-white/15 leading-relaxed">
-                  {mode === 'chat'
+                  {mode === 'guide'
+                    ? 'Guide mode works best in the floating palette.\nOpen it with Cmd+K.'
+                    : mode === 'chat'
                     ? (hasRealContext ? 'I can see your screen. Ask me anything.' : 'Ask me to help with anything.')
                     : 'Describe a situation to get Safe, Smart & Bold options.'}
                 </p>
