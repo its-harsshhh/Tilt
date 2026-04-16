@@ -44,13 +44,18 @@ export default function LandingPage({ onStartScreenShare }) {
           AI that understands what you're doing and helps you choose — without taking over.
         </p>
 
-        {/* CTA Button */}
+        {/* CTA Button — gradient, border, text shadow */}
         <button
           onClick={onStartScreenShare}
           data-testid="start-screen-share-btn"
-          className="px-9 py-3.5 rounded-lg bg-slate-900 text-white font-body font-medium text-[15px]
-                     hover:bg-slate-800 active:scale-[0.98] transition-all duration-150
-                     shadow-md shadow-slate-900/15"
+          className="px-10 py-4 rounded-2xl font-body font-medium text-[15px] text-white
+                     active:scale-[0.97] transition-all duration-150 cursor-pointer"
+          style={{
+            background: 'linear-gradient(180deg, #334155 0%, #0f172a 100%)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: '0 1px 0 0 rgba(255,255,255,0.06) inset, 0 8px 24px rgba(15,23,42,0.35), 0 2px 6px rgba(15,23,42,0.2)',
+            textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+          }}
         >
           Start Decision Layer
         </button>
