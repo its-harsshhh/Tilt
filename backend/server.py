@@ -33,6 +33,8 @@ class DecisionRequest(BaseModel):
     context: Optional[str] = None
     user_preference: Optional[str] = None
     tone_traits: Optional[list] = None
+    modifier: Optional[str] = None
+    previous_response: Optional[str] = None
 
 
 class DecisionResponse(BaseModel):
@@ -580,12 +582,17 @@ You generate exactly 3 response options for any given situation:
 - SMART: Clear, balanced, confident. The recommended middle ground. Direct but diplomatic.
 - BOLD: Assertive, high-conviction, direct. Takes a strong stance. No hedging.
 
+You also provide INSIGHTS to help the user think deeper:
+- trade_offs: 1 line per option explaining the risk/reward
+- blind_spots: 1 sentence about what the user might be missing
+- recommendation: 1 sentence actionable advice on what to do now
+
 Rules:
 - Each option MUST be distinctly different in tone and approach
 - Responses must be concise (2-4 sentences max each)
 - Write like a modern professional — no corporate jargon, no fluff
 - Responses must be immediately usable (copy-paste ready)
-- Generate a 1-line "why this works" reasoning for each option
+- Insights must be sharp and concise — max 1-2 lines each
 
 You MUST respond with valid JSON only. No markdown, no explanation outside JSON.
 
@@ -610,10 +617,25 @@ Response format:
     "safe": "1-line why the safe option works",
     "smart": "1-line why the smart option works",
     "bold": "1-line why the bold option works"
+  },
+  "insights": {
+    "trade_offs": {
+      "safe": "low risk, may sound passive",
+      "smart": "balanced, most effective",
+      "bold": "strong impact, might feel pushy"
+    },
+    "blind_spots": "One sentence about what the user might be overlooking",
+    "recommendation": "One sentence — what to do right now"
   }
 }"""
 
-    user_prompt = f"Situation/message to respond to:\n\"{request.input_text}\"{screen_context}{preference_context}{tone_context}\n\nGenerate the 3 decision options as JSON."
+    modifier_context = ""
+    if request.modifier:
+        modifier_context = f"\n\nThe user wants to refine the output. Modifier: \"{request.modifier}\""
+        if request.previous_response:
+            modifier_context += f"\nPrevious response they selected: \"{request.previous_response}\"\nApply the modifier to improve/change the response accordingly."
+
+    user_prompt = f"Situation/message to respond to:\n\"{request.input_text}\"{screen_context}{preference_context}{tone_context}{modifier_context}\n\nGenerate the 3 decision options + insights as JSON."
 
     session_id = f"tilt-{uuid.uuid4().hex[:8]}"
 
@@ -637,15 +659,15 @@ Response format:
 
         result = json.loads(cleaned)
 
-        return DecisionResponse(
-            safe=result.get("safe", {}),
-            smart=result.get("smart", {}),
-            bold=result.get("bold", {}),
-            reasoning=result.get("reasoning", {}),
-        )
+        return {
+            "safe": result.get("safe", {}),
+            "smart": result.get("smart", {}),
+            "bold": result.get("bold", {}),
+            "reasoning": result.get("reasoning", {}),
+            "insights": result.get("insights", {}),
+        }
 
     except json.JSONDecodeError:
-        # Fallback: try GPT-5.2
         try:
             chat_fallback = LlmChat(
                 api_key=EMERGENT_KEY,
@@ -664,12 +686,13 @@ Response format:
                 cleaned = cleaned.strip()
 
             result = json.loads(cleaned)
-            return DecisionResponse(
-                safe=result.get("safe", {}),
-                smart=result.get("smart", {}),
-                bold=result.get("bold", {}),
-                reasoning=result.get("reasoning", {}),
-            )
+            return {
+                "safe": result.get("safe", {}),
+                "smart": result.get("smart", {}),
+                "bold": result.get("bold", {}),
+                "reasoning": result.get("reasoning", {}),
+                "insights": result.get("insights", {}),
+            }
         except Exception as e2:
             raise HTTPException(status_code=500, detail=f"Failed to parse LLM response: {str(e2)}")
 

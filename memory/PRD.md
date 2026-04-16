@@ -1,41 +1,47 @@
 # Tilt — AI Screen Assistant PRD
 
 ## Original Problem Statement
-Build "Tilt" — a browser-based AI that sees your screen and helps you get things done. Two modes: Tilt (unified chat + step-by-step guidance with voice) and Decide (Safe/Smart/Bold options). Full voice I/O.
+Build "Tilt" — a browser-based AI that sees your screen and helps you think, decide, and reflect. Context-aware suggestion pills + deep decision support with insights.
 
 ## Architecture
 - **Frontend**: React 18 + Tailwind CSS
 - **Backend**: FastAPI + Claude Sonnet 4.5 + OpenAI Whisper + OpenAI TTS via Emergent LLM key
 - **State**: localStorage (no auth, no DB)
-- **Screen Sharing**: getDisplayMedia with captures every 10s
-- **Vision**: Claude Sonnet 4.5 vision for analysis + guidance
-- **Voice Input**: OpenAI Whisper (whisper-1) for speech-to-text
-- **Voice Output**: OpenAI TTS (tts-1, nova voice) for spoken instructions
-- **Floating Palette**: Document PiP API, collapsible to icon
+- **Vision**: Claude Sonnet 4.5 vision for screen analysis + guidance
+- **Voice I/O**: Whisper STT + TTS (nova voice)
+- **Floating Palette**: Document PiP API, collapsible
 
-## What's Been Implemented (Apr 16, 2026)
-- [x] Landing page with Ghibli aesthetic
-- [x] Screen sharing with animated border
-- [x] Real AI vision screen analysis every 10s
-- [x] **2 modes: Tilt / Decide** (separate message histories)
-- [x] **Tilt mode** — auto-detects chat vs step-by-step guidance
-- [x] **Decide mode** — Safe/Smart/Bold options
-- [x] **Voice input** — mic button, Whisper transcription, auto-send
-- [x] **Voice mode (TTS)** — toggle in Tilt tab, speaks guide instructions aloud
-  - Auto-speaks each new guide step
-  - Works when palette is minimized — hands-free guidance
-  - "Speaking..." indicator in guide header
-- [x] **Collapsible palette** — minimize to icon, Cmd+K to expand
-- [x] Continuous conversation, keyboard nav, memory/adaptation/reflection
+## What's Been Implemented (Apr 17, 2026)
+
+### Tilt Tab (Context Layer)
+- [x] Suggestion pills empty state: "Summarize what I'm looking at", "What should I do next?", etc.
+- [x] Clicking pill auto-fills input and starts chat/guide
+- [x] Full conversational AI (chat + step-by-step guide)
+- [x] Screen context banner from vision analysis
+- [x] Voice mode toggle (TTS speaks instructions)
+
+### Decide Tab (Decision Layer - Upgraded)
+- [x] **Empty state pills**: "Help me reply to this", "Make this more confident", etc.
+- [x] **3 Decision options**: Safe / Smart / Bold with keyboard nav
+- [x] **Context pills** (after selecting): "Show trade-offs", "Make it shorter", "What am I missing?", etc. — clicking re-generates with modifier
+- [x] **Insight layer**: Trade-offs (per option), Blind spots, What to do now — all 1-2 lines
+- [x] Modifier support in backend (refines output based on pill selection)
+
+### Other Features
+- [x] Landing page persists during screen sharing (red "Co-evolving..." pill)
+- [x] Collapsible palette (minimize to icon, Cmd+K to expand)
+- [x] Voice input (Whisper) in both tabs
+- [x] Voice output (TTS) for guide instructions
+- [x] Memory/Adaptation/Reflection layers
+- [x] Separate message histories per tab
 
 ## Key API Endpoints
-- `GET /api/health`
 - `POST /api/tilt` — Unified chat + guide
-- `POST /api/transcribe` — Whisper STT (audio upload)
-- `POST /api/speak` — TTS (text → audio base64, nova voice)
+- `POST /api/generate-decisions` — Safe/Smart/Bold + insights + modifier support
+- `POST /api/transcribe` — Whisper STT
+- `POST /api/speak` — TTS
 - `POST /api/analyze-screen` — Vision analysis
-- `POST /api/generate-decisions` — Safe/Smart/Bold
 
 ## Backlog
 ### P1 - Drag-to-paste
-### P2 - Decision history sidebar, Custom tone profiles
+### P2 - Decision history sidebar
