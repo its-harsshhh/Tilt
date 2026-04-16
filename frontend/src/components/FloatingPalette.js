@@ -8,11 +8,10 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [mode, setMode] = useState('tilt'); // 'tilt' or 'decide'
+  const [mode, setMode] = useState('tilt');
   const [decisions, setDecisions] = useState(null);
   const [activeIdx, setActiveIdx] = useState(-1);
   const [copied, setCopied] = useState(null);
-  // Guide state (used within Tilt mode)
   const [guideActive, setGuideActive] = useState(false);
   const [guideTask, setGuideTask] = useState(null);
   const [guideStep, setGuideStep] = useState(1);
@@ -22,13 +21,12 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
   const guideIntervalRef = useRef(null);
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
+  const submittingRef = useRef(false); // prevent double submit
 
   useEffect(() => { setTimeout(() => inputRef.current?.focus(), 200); }, []);
-
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, loading, decisions, guideResult, annotatedImage]);
-
   useEffect(() => {
     return () => { if (guideIntervalRef.current) clearInterval(guideIntervalRef.current); };
   }, []);
@@ -47,7 +45,7 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
     return null;
   }, [captureFrameFn]);
 
-  // Draw annotation on screenshot
+  // Smaller, more precise annotation
   const drawAnnotation = useCallback((frameDataUrl, region) => {
     if (!region) return;
     const img = new Image();
@@ -58,33 +56,45 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
       ctx.drawImage(img, 0, 0);
       const cx = region.x * img.width;
       const cy = region.y * img.height;
-      // Outer glow
-      ctx.beginPath(); ctx.arc(cx, cy, 40, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(99, 102, 241, 0.15)'; ctx.fill();
-      // Ring
-      ctx.beginPath(); ctx.arc(cx, cy, 28, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(129, 140, 248, 0.8)'; ctx.lineWidth = 3; ctx.stroke();
-      // Dot
-      ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(129, 140, 248, 0.9)'; ctx.fill();
-      // Label
+      // Thin crosshair lines
+      ctx.strokeStyle = 'rgba(129, 140, 248, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, img.height); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(img.width, cy); ctx.stroke();
+      ctx.setLineDash([]);
+      // Small precise ring
+      ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(129, 140, 248, 0.9)'; ctx.lineWidth = 2.5; ctx.stroke();
+      // Tiny center dot
+      ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#818cf8'; ctx.fill();
+      // Arrow pointing to it
+      const arrowLen = 30;
+      const ax = cx + 22; const ay = cy - 22;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(cx + 12, cy - 12);
+      ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 2; ctx.stroke();
+      // Label with background
       if (region.label) {
-        ctx.font = 'bold 14px Inter, sans-serif';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)'; ctx.lineWidth = 3;
-        ctx.fillStyle = '#fff';
-        const tx = Math.min(cx + 35, img.width - 100);
-        const ty = cy + 5;
-        ctx.strokeText(region.label, tx, ty);
-        ctx.fillText(region.label, tx, ty);
+        ctx.font = '600 12px Inter, sans-serif';
+        const tw = ctx.measureText(region.label).width;
+        const lx = ax + 4; const ly = ay - 6;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.beginPath();
+        ctx.roundRect(lx - 4, ly - 12, tw + 8, 16, 4);
+        ctx.fill();
+        ctx.fillStyle = '#c7d2fe';
+        ctx.fillText(region.label, lx, ly);
       }
-      setAnnotatedImage(canvas.toDataURL('image/jpeg', 0.8));
+      setAnnotatedImage(canvas.toDataURL('image/jpeg', 0.85));
     };
     img.src = frameDataUrl;
   }, []);
 
-  // Unified Tilt send — auto-detects chat vs guide
+  // Unified Tilt send
   const sendTilt = useCallback(async (text) => {
-    if (!text.trim()) return;
+    if (!text.trim() || submittingRef.current) return;
+    submittingRef.current = true;
     const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
     setMessages(prev => [...prev, userMsg]);
     setInput(''); setLoading(true); setError(null);
@@ -105,34 +115,33 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
           conversation,
           user_preference: preferred !== 'smart' ? preferred : null,
           tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null,
-          guide_active: false,
-          completed_steps: [],
-          step_number: 1,
         }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
       const data = await res.json();
 
       if (data.type === 'guide') {
-        // Start guide mode
         setGuideActive(true);
         setGuideTask(text.trim());
         setGuideStep(data.step_number || 1);
         setGuideSteps([]);
         setGuideResult(data);
         if (frame) drawAnnotation(frame, data.region);
-
-        // Start auto-capture
+        // Add guide as a message so it appears inline below user msg
+        setMessages(prev => [...prev, {
+          role: 'assistant', id: Date.now() + 1,
+          isGuide: true, guideData: data, guideImage: null, // image set async
+          content: data.instruction,
+        }]);
         if (guideIntervalRef.current) clearInterval(guideIntervalRef.current);
         guideIntervalRef.current = setInterval(() => {
           autoAdvance(text.trim(), data, 1, []);
         }, 6000);
       } else {
-        // Chat response
         setMessages(prev => [...prev, { role: 'assistant', content: data.response, id: Date.now() + 1 }]);
       }
     } catch (err) { setError(err.message); }
-    finally { setLoading(false); setTimeout(() => inputRef.current?.focus(), 100); }
+    finally { setLoading(false); submittingRef.current = false; setTimeout(() => inputRef.current?.focus(), 100); }
   }, [messages, screenContext, captureFrame, drawAnnotation]);
 
   // Auto-advance guide
@@ -146,12 +155,8 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: task,
-          image_base64: frame,
-          guide_active: true,
-          guide_task: task,
-          completed_steps: completedSteps,
-          step_number: prevStep + 1,
+          message: task, image_base64: frame, guide_active: true, guide_task: task,
+          completed_steps: completedSteps, step_number: prevStep + 1,
         }),
       });
       if (!res.ok) return;
@@ -166,7 +171,6 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
     } catch (e) { /* silent */ }
   }, [captureFrame, drawAnnotation]);
 
-  // Keep interval in sync with latest state
   useEffect(() => {
     if (guideActive && guideTask && guideResult && !guideResult.is_complete) {
       if (guideIntervalRef.current) clearInterval(guideIntervalRef.current);
@@ -188,7 +192,8 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
 
   // Decide mode
   const sendDecide = useCallback(async (text) => {
-    if (!text.trim()) return;
+    if (!text.trim() || submittingRef.current) return;
+    submittingRef.current = true;
     const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
     setMessages(prev => [...prev, userMsg]);
     setInput(''); setLoading(true); setError(null); setDecisions(null); setActiveIdx(-1);
@@ -209,7 +214,7 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
       const types = ['safe', 'smart', 'bold'];
       setActiveIdx(types.indexOf(preferred) >= 0 ? types.indexOf(preferred) : 1);
     } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+    finally { setLoading(false); submittingRef.current = false; }
   }, [screenContext]);
 
   const handleSelectDecision = useCallback((type) => {
@@ -224,16 +229,13 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
   }, [decisions, messages]);
 
   const handleSubmit = useCallback(() => {
-    if (!input.trim()) return;
+    if (!input.trim() || submittingRef.current) return;
     if (mode === 'decide') sendDecide(input);
     else sendTilt(input);
   }, [input, mode, sendTilt, sendDecide]);
 
+  // Only handle arrow keys + Enter for decisions at parent level
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && !decisions) {
-      if (input.trim()) { e.preventDefault(); handleSubmit(); }
-      return;
-    }
     if (decisions) {
       const types = ['safe', 'smart', 'bold'];
       if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(prev => Math.min(prev + 1, 2)); }
@@ -268,18 +270,17 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
                 flex: 1, padding: '6px 0', borderRadius: '6px', border: 'none', cursor: 'pointer',
                 background: mode === t.key ? 'rgba(255,255,255,0.1)' : 'transparent',
                 color: mode === t.key ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
-                fontSize: '12px', fontWeight: '600', fontFamily: "'Inter', sans-serif", transition: 'all 0.15s',
+                fontSize: '12px', fontWeight: '600', fontFamily: "'Inter', sans-serif",
               }}>{t.label}</button>
           ))}
         </div>
-        {/* Screen context — only in non-guide state */}
         {hasCtx && !guideActive && (
           <div data-testid="pip-screen-context" style={{
             display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px',
             background: 'rgba(99,102,241,0.05)', borderRadius: '8px', padding: '5px 10px',
             border: '1px solid rgba(99,102,241,0.08)',
           }}>
-            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#818cf8', flexShrink: 0, animation: 'pulse 2s infinite' }} />
+            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#818cf8', flexShrink: 0 }} />
             <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{screenContext}</p>
           </div>
         )}
@@ -289,7 +290,7 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
         {/* Empty state */}
-        {messages.length === 0 && !loading && !guideActive && (
+        {messages.length === 0 && !loading && (
           <div style={{ textAlign: 'center', padding: '28px 8px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
             {insight && mode === 'tilt' && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', padding: '4px 10px', marginBottom: '10px' }} data-testid="pip-insight">
@@ -305,66 +306,36 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
           </div>
         )}
 
-        {/* Guide view — inline within Tilt mode */}
+        {/* Guide header — shown when guide is active */}
         {guideActive && guideResult && (
-          <div data-testid="guide-view" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(99,102,241,0.08)', borderRadius: '8px', padding: '6px 10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: guideResult.is_complete ? '#4ade80' : '#818cf8', animation: guideResult.is_complete ? 'none' : 'pulse 1.5s infinite' }} />
-                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>
-                  {guideResult.is_complete ? 'Done!' : `Step ${guideStep}`}
-                </span>
-              </div>
-              <button onClick={stopGuide} data-testid="guide-stop-btn" style={{
-                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '6px', padding: '3px 10px', cursor: 'pointer',
-                color: 'rgba(255,255,255,0.35)', fontSize: '10px', fontFamily: "'Inter', sans-serif",
-              }}>Stop</button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(99,102,241,0.08)', borderRadius: '8px', padding: '6px 10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: guideResult.is_complete ? '#4ade80' : '#818cf8', animation: guideResult.is_complete ? 'none' : 'pulse 1.5s infinite' }} />
+              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>
+                {guideResult.is_complete ? 'Done!' : `Step ${guideStep}`}
+              </span>
             </div>
-
-            {guideSteps.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {guideSteps.map((s, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 8px' }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', textDecoration: 'line-through' }}>{s}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {annotatedImage && (
-              <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(129,140,248,0.2)' }}>
-                <img src={annotatedImage} alt="Annotated screenshot" data-testid="guide-annotated-image" style={{ width: '100%', height: 'auto', display: 'block' }} />
-              </div>
-            )}
-
-            {!guideResult.is_complete && (
-              <div style={{ background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.15)', borderRadius: '10px', padding: '10px 12px' }} data-testid="guide-instruction">
-                <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.85)', margin: 0, lineHeight: '1.5', fontWeight: '500' }}>{guideResult.instruction}</p>
-                {guideResult.detail && <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', margin: '4px 0 0' }}>{guideResult.detail}</p>}
-              </div>
-            )}
-
-            {guideResult.is_complete && (
-              <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: '10px', padding: '12px', textAlign: 'center' }} data-testid="guide-complete">
-                <p style={{ fontSize: '14px', color: '#4ade80', margin: 0, fontWeight: '600' }}>Task complete!</p>
-                <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)', margin: '4px 0 0' }}>{guideResult.instruction}</p>
-              </div>
-            )}
-
-            {!guideResult.is_complete && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 4px' }}>
-                <div style={{ display: 'flex', gap: '3px' }}>
-                  {[0,1,2].map(i => <div key={i} style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(129,140,248,0.4)', animation: `bounce 1.5s ease-in-out ${i*0.2}s infinite` }} />)}
-                </div>
-                <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)' }}>Watching... do the step, I'll auto-advance</span>
-              </div>
-            )}
+            <button onClick={stopGuide} data-testid="guide-stop-btn" style={{
+              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '6px', padding: '3px 10px', cursor: 'pointer',
+              color: 'rgba(255,255,255,0.35)', fontSize: '10px', fontFamily: "'Inter', sans-serif",
+            }}>Stop</button>
           </div>
         )}
 
-        {/* Chat messages */}
+        {/* Completed steps */}
+        {guideSteps.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+            {guideSteps.map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '1px 6px' }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', textDecoration: 'line-through' }}>{s}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Messages — chat + guide inline */}
         {messages.map((msg) => (
           <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
             {msg.role === 'user' ? (
@@ -372,16 +343,50 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
                 <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', margin: 0, lineHeight: '1.5', wordBreak: 'break-word' }}>{msg.content}</p>
               </div>
             ) : (
-              <div style={{ maxWidth: '95%', width: '100%' }}>
+              <div style={{ maxWidth: '100%', width: '100%' }}>
                 {msg.decisionType && <span style={{ fontSize: '9px', fontWeight: '600', textTransform: 'uppercase', color: tagColors[msg.decisionType], marginBottom: '3px', display: 'block' }}>{msg.decisionType}</span>}
-                <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '4px 12px 12px 12px', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.75)', margin: 0, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
-                  {msg.reasoning && <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', margin: '6px 0 0' }}>{msg.reasoning}</p>}
-                </div>
-                <button onClick={() => handleCopy(msg.content, msg.id)} data-testid={`copy-msg-${msg.id}`}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', color: copied === msg.id ? '#4ade80' : 'rgba(255,255,255,0.2)', fontSize: '10px', fontFamily: "'Inter', sans-serif", marginTop: '2px' }}>
-                  {copied === msg.id ? 'copied' : 'copy'}
-                </button>
+
+                {/* Guide response — annotated screenshot + instruction inline */}
+                {msg.isGuide ? (
+                  <div data-testid="guide-view" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {annotatedImage && (
+                      <div style={{ borderRadius: '10px', overflow: 'hidden', border: '1px solid rgba(129,140,248,0.2)' }}>
+                        <img src={annotatedImage} alt="Guide" data-testid="guide-annotated-image" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                      </div>
+                    )}
+                    <div style={{ background: 'rgba(129,140,248,0.08)', border: '1px solid rgba(129,140,248,0.15)', borderRadius: '10px', padding: '10px 12px' }} data-testid="guide-instruction">
+                      <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.85)', margin: 0, lineHeight: '1.5', fontWeight: '500' }}>{guideResult?.instruction || msg.content}</p>
+                      {(guideResult?.detail || msg.guideData?.detail) && (
+                        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', margin: '4px 0 0' }}>{guideResult?.detail || msg.guideData?.detail}</p>
+                      )}
+                    </div>
+                    {!guideResult?.is_complete && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '0 2px' }}>
+                        <div style={{ display: 'flex', gap: '3px' }}>
+                          {[0,1,2].map(i => <div key={i} style={{ width: '3px', height: '3px', borderRadius: '50%', background: 'rgba(129,140,248,0.4)', animation: `bounce 1.5s ease-in-out ${i*0.2}s infinite` }} />)}
+                        </div>
+                        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.18)' }}>Watching... I'll auto-advance</span>
+                      </div>
+                    )}
+                    {guideResult?.is_complete && (
+                      <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.15)', borderRadius: '8px', padding: '8px 10px', textAlign: 'center' }} data-testid="guide-complete">
+                        <p style={{ fontSize: '12px', color: '#4ade80', margin: 0, fontWeight: '600' }}>Task complete!</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Normal chat response */
+                  <>
+                    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '4px 12px 12px 12px', padding: '10px 12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                      <p style={{ fontSize: '13px', color: 'rgba(255,255,255,0.75)', margin: 0, lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{msg.content}</p>
+                      {msg.reasoning && <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', margin: '6px 0 0' }}>{msg.reasoning}</p>}
+                    </div>
+                    <button onClick={() => handleCopy(msg.content, msg.id)} data-testid={`copy-msg-${msg.id}`}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', color: copied === msg.id ? '#4ade80' : 'rgba(255,255,255,0.2)', fontSize: '10px', fontFamily: "'Inter', sans-serif", marginTop: '2px' }}>
+                      {copied === msg.id ? 'copied' : 'copy'}
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -423,7 +428,7 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
         )}
       </div>
 
-      {/* Input — always at bottom */}
+      {/* Input — always at bottom, ONLY source of Enter submit */}
       <div style={{ padding: '6px 12px 10px', flexShrink: 0, borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(2,6,23,0.95)' }}>
         <div style={{
           background: 'linear-gradient(180deg, rgba(51,65,85,0.5) 0%, rgba(30,41,59,0.6) 100%)',
@@ -436,7 +441,13 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
           <input ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)}
             placeholder={messages.length > 0 || guideActive ? 'Continue...' : mode === 'decide' ? 'Describe the situation...' : 'Ask anything or say "help me do X"...'}
             data-testid="pip-decision-input" disabled={loading}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !decisions && input.trim()) { e.preventDefault(); handleSubmit(); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !decisions && input.trim()) {
+                e.preventDefault();
+                e.stopPropagation(); // prevent parent onKeyDown from also firing
+                handleSubmit();
+              }
+            }}
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#f1f5f9', fontSize: '14px', fontFamily: "'Inter', sans-serif", padding: '9px 0', opacity: loading ? 0.4 : 1 }}
           />
           {input.trim() && !loading && (
