@@ -19,24 +19,24 @@ export default function LandingPage({ onStartScreenShare }) {
         <div className="absolute inset-0 bg-gradient-to-t from-white from-[20%] via-white/50 via-[45%] to-transparent to-[70%]" />
       </div>
 
+      {/* Top-left logo */}
+      <div className="absolute top-6 left-7 z-20" data-testid="tilt-logo">
+        <img src="/tilt-logo.svg" alt="Tilt" className="h-7 drop-shadow-[0_2px_12px_rgba(0,0,0,0.15)]" />
+      </div>
+
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center justify-center h-full px-6">
-        {/* Logo */}
-        <div className="mb-7" data-testid="tilt-logo">
-          <img src="/tilt-logo.svg" alt="Tilt" className="h-8 drop-shadow-[0_2px_12px_rgba(0,0,0,0.15)]" />
-        </div>
-
-        {/* Headline — Instrument Serif */}
+        {/* Headline — Instrument Serif, dark shade */}
         <h1
-          className="text-5xl md:text-[4.8rem] leading-[1.1] text-white text-center mb-6"
+          className="text-5xl md:text-[4.8rem] leading-[1.1] text-center mb-6"
           style={{
             fontFamily: "'Instrument Serif', serif",
-            textShadow: '0 2px 24px rgba(0,0,0,0.2), 0 1px 6px rgba(0,0,0,0.1)',
+            color: '#1e293b',
           }}
           data-testid="landing-headline"
         >
           Decide better.<br />
-          <span className="text-white/75">Not faster.</span>
+          <span style={{ color: '#475569' }}>Not faster.</span>
         </h1>
 
         {/* Subheading */}
