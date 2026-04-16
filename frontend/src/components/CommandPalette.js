@@ -1,200 +1,217 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ArrowRight, Loader2 } from 'lucide-react';
-import DecisionCards from './DecisionCards';
-import OutputView from './OutputView';
-import { getPreferredStyle, getInsightText, getMemory } from '../hooks/useMemory';
+import { X, Search, Loader2, Shield, Lightbulb, Zap, Copy, Check, RotateCcw } from 'lucide-react';
+import { getPreferredStyle, getInsightText, getMemory, saveDecision } from '../hooks/useMemory';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function CommandPalette({ isOpen, onClose, screenContext }) {
   const [input, setInput] = useState('');
-  const [phase, setPhase] = useState('input'); // input | loading | decisions | output
+  const [phase, setPhase] = useState('input');
   const [decisions, setDecisions] = useState(null);
   const [selectedType, setSelectedType] = useState(null);
   const [error, setError] = useState(null);
+  const [copied, setCopied] = useState(false);
   const inputRef = useRef(null);
   const insight = getInsightText();
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 100);
     if (!isOpen) {
-      // Reset state when closed
-      setPhase('input');
-      setInput('');
-      setDecisions(null);
-      setSelectedType(null);
-      setError(null);
+      setPhase('input'); setInput(''); setDecisions(null);
+      setSelectedType(null); setError(null); setCopied(false);
     }
   }, [isOpen]);
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
     if (!input.trim()) return;
-
-    setPhase('loading');
-    setError(null);
-
+    setPhase('loading'); setError(null);
     const memory = getMemory();
     const preferred = getPreferredStyle();
-
     try {
       const res = await fetch(`${API_URL}/api/generate-decisions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          input_text: input.trim(),
-          context: screenContext || null,
+          input_text: input.trim(), context: screenContext || null,
           user_preference: preferred !== 'smart' ? preferred : null,
           tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null,
         }),
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Failed to generate decisions');
-      }
-
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
       const data = await res.json();
-      setDecisions(data);
-      setPhase('decisions');
-    } catch (err) {
-      setError(err.message);
-      setPhase('input');
-    }
+      setDecisions(data); setPhase('decisions');
+    } catch (err) { setError(err.message); setPhase('input'); }
   };
 
   const handleSelect = (type) => {
     setSelectedType(type);
+    saveDecision(type, input, decisions[type]?.response);
     setPhase('output');
   };
 
-  const handleNewDecision = () => {
-    setPhase('input');
-    setInput('');
-    setDecisions(null);
-    setSelectedType(null);
+  const handleCopy = async () => {
+    const text = decisions?.[selectedType]?.response || '';
+    try { await navigator.clipboard.writeText(text); } catch {
+      const el = document.createElement('textarea'); el.value = text;
+      document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el);
+    }
+    setCopied(true); setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleReset = () => {
+    setPhase('input'); setInput(''); setDecisions(null);
+    setSelectedType(null); setCopied(false);
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   if (!isOpen) return null;
+  const preferred = getPreferredStyle();
+  const cardConfig = {
+    safe:  { icon: Shield, accent: 'text-slate-400', bg: 'bg-white/[0.03]', border: 'border-white/[0.06]' },
+    smart: { icon: Lightbulb, accent: 'text-slate-200', bg: 'bg-white/[0.06]', border: 'border-white/[0.12]' },
+    bold:  { icon: Zap, accent: 'text-amber-400', bg: 'bg-white/[0.08]', border: 'border-white/[0.15]' },
+  };
 
   return (
     <div
-      className="fixed inset-0 z-[10000] flex items-center justify-center"
+      className="fixed inset-0 z-[10000] flex items-start justify-center pt-[15vh]"
       data-testid="command-palette-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" />
 
-      {/* Modal */}
-      <div
-        className="relative z-10 w-full max-w-3xl mx-6 glass-surface rounded-3xl overflow-hidden animate-zoom-in"
-        data-testid="command-palette-modal"
-      >
-        {/* Header bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <img src="/tilt-logo.svg" alt="Tilt" className="h-4" data-testid="tilt-logo" />
-            <span className="font-mono text-[10px] tracking-widest uppercase text-white/30">
-              {phase === 'loading' ? 'Thinking...' : phase === 'decisions' ? 'Choose your approach' : phase === 'output' ? 'Response ready' : 'Decision mode'}
-            </span>
+      <div className="relative z-10 w-full max-w-2xl mx-6 animate-zoom-in" data-testid="command-palette-modal">
+
+        {/* ── Spotlight Search Bar ── */}
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: 'linear-gradient(180deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.95) 100%)',
+            backdropFilter: 'blur(48px) saturate(1.4)',
+            WebkitBackdropFilter: 'blur(48px) saturate(1.4)',
+            border: '1px solid rgba(148,163,184,0.12)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.04) inset',
+          }}
+        >
+          {/* Search input row */}
+          <div className="flex items-center gap-3 px-5 py-1">
+            <Search size={18} className="text-slate-500 flex-shrink-0" strokeWidth={2} />
+            <input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="What do you want to do here?"
+              data-testid="decision-input"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+              }}
+              className="flex-1 bg-transparent border-none text-[15px] text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-0 py-3.5 font-body"
+            />
+            {input.trim() && phase === 'input' && (
+              <button onClick={handleSubmit} data-testid="submit-decision-btn"
+                className="px-3 py-1.5 rounded-lg bg-white/10 border border-white/[0.08] text-[11px] text-white/50 font-medium font-body hover:bg-white/15 transition-colors">
+                Return ↵
+              </button>
+            )}
+            {phase === 'loading' && <Loader2 size={18} className="text-slate-500 animate-spin flex-shrink-0" />}
+            <button onClick={onClose} data-testid="close-palette-btn"
+              className="w-6 h-6 rounded-md bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center flex-shrink-0">
+              <X size={12} className="text-white/30" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            data-testid="close-palette-btn"
-            className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center"
-          >
-            <X size={14} className="text-white/40" />
-          </button>
-        </div>
 
-        {/* Insight bar */}
-        {insight && (
-          <div className="px-6 py-2.5 border-b border-white/5 bg-white/[0.02]" data-testid="insight-bar">
-            <span className="font-mono text-[10px] tracking-widest uppercase text-white/25">
-              {insight}
-            </span>
-          </div>
-        )}
+          {error && <p className="px-5 pb-2 text-red-400/80 font-mono text-xs" data-testid="error-message">{error}</p>}
 
-        {/* Content */}
-        <div className="p-6">
-          {phase === 'input' && (
-            <form onSubmit={handleSubmit} data-testid="decision-input-form">
-              <div className="flex items-start gap-4">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="What do you want to do here?"
-                  data-testid="decision-input"
-                  rows={3}
-                  className="flex-1 bg-transparent border-none text-2xl md:text-3xl font-heading font-light text-white placeholder-zinc-700 focus:outline-none focus:ring-0 resize-none leading-tight"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSubmit();
-                    }
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim()}
-                  data-testid="submit-decision-btn"
-                  className="mt-1 w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-20 disabled:cursor-not-allowed transition-all flex items-center justify-center flex-shrink-0"
-                >
-                  <ArrowRight size={16} className="text-white" />
-                </button>
+          {/* Insight chip */}
+          {insight && phase === 'input' && (
+            <div className="px-5 pb-3" data-testid="insight-bar">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/[0.08] border border-indigo-400/10">
+                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/60" />
+                <span className="text-[10px] text-indigo-300/50 font-medium">{insight}</span>
               </div>
-              {error && (
-                <p className="mt-4 text-red-400/80 font-mono text-xs" data-testid="error-message">{error}</p>
-              )}
-            </form>
-          )}
-
-          {phase === 'loading' && (
-            <div className="flex flex-col items-center justify-center py-12 gap-4" data-testid="loading-state">
-              <Loader2 size={24} className="text-white/30 animate-spin" />
-              <span className="font-mono text-xs tracking-widest uppercase text-white/20">
-                Generating options...
-              </span>
             </div>
           )}
 
-          {phase === 'decisions' && decisions && (
-            <DecisionCards
-              decisions={decisions}
-              onSelect={handleSelect}
-              preferredStyle={getPreferredStyle()}
-            />
-          )}
+          {/* Results */}
+          {(phase === 'loading' || phase === 'decisions' || phase === 'output') && (
+            <div className="border-t border-white/[0.06] px-4 py-3 max-h-[50vh] overflow-y-auto">
 
-          {phase === 'output' && decisions && selectedType && (
-            <OutputView
-              decisions={decisions}
-              selectedType={selectedType}
-              inputText={input}
-              onNewDecision={handleNewDecision}
-              onClose={onClose}
-            />
+              {/* Loading shimmer */}
+              {phase === 'loading' && (
+                <div className="flex flex-col gap-2" data-testid="loading-state">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="h-16 rounded-xl skeleton-pulse" />
+                  ))}
+                </div>
+              )}
+
+              {/* Decision cards */}
+              {phase === 'decisions' && decisions && (
+                <div className="flex flex-col gap-1.5 animate-slide-up" data-testid="decision-cards">
+                  {['safe', 'smart', 'bold'].map((type) => {
+                    const c = cardConfig[type]; const Icon = c.icon;
+                    const d = decisions[type]; const isPref = type === preferred;
+                    return (
+                      <button key={type} onClick={() => handleSelect(type)} data-testid={`decision-card-${type}`}
+                        className={`w-full text-left px-4 py-3 rounded-xl ${c.bg} border ${c.border}
+                          hover:bg-white/[0.08] transition-all cursor-pointer
+                          ${isPref ? 'ring-1 ring-indigo-400/20' : ''}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Icon size={13} className={c.accent} strokeWidth={1.5} />
+                          <span className={`text-[10px] font-semibold uppercase tracking-widest ${c.accent}`}>
+                            {d?.label}
+                          </span>
+                          {isPref && (
+                            <span className="text-[9px] font-medium text-indigo-400/50 bg-indigo-400/[0.08] px-1.5 py-0.5 rounded"
+                              data-testid={`preferred-badge-${type}`}>preferred</span>
+                          )}
+                          <span className="text-[10px] text-white/20 ml-auto">{d?.description}</span>
+                        </div>
+                        <p className="text-[13px] text-white/50 leading-relaxed line-clamp-2">{d?.response}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Output */}
+              {phase === 'output' && decisions && selectedType && (
+                <div className="animate-slide-up" data-testid="output-view">
+                  <div className="flex items-center gap-2 mb-3">
+                    {React.createElement(cardConfig[selectedType].icon, { size: 13, className: cardConfig[selectedType].accent, strokeWidth: 1.5 })}
+                    <span className={`text-[10px] font-semibold uppercase tracking-widest ${cardConfig[selectedType].accent}`}>
+                      {decisions[selectedType]?.label} Response
+                    </span>
+                  </div>
+                  <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-4 py-3.5 mb-3" data-testid="output-response">
+                    <p className="text-[14px] text-white/85 leading-relaxed font-body">{decisions[selectedType]?.response}</p>
+                  </div>
+                  <div className="flex gap-2 mb-3">
+                    <button onClick={handleCopy} data-testid="copy-response-btn"
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border text-[12px] font-medium transition-all
+                        ${copied ? 'bg-green-500/10 border-green-400/20 text-green-400' : 'bg-white/[0.06] border-white/[0.08] text-white/50 hover:bg-white/[0.1]'}`}>
+                      {copied ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy</>}
+                    </button>
+                    <button onClick={handleReset} data-testid="new-decision-btn"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-white/[0.03] border border-white/[0.05] text-white/30 text-[12px] font-medium hover:bg-white/[0.06] transition-all">
+                      <RotateCcw size={13} /> New
+                    </button>
+                  </div>
+                  {decisions.reasoning?.[selectedType] && (
+                    <div className="border-t border-white/[0.04] pt-2.5" data-testid="reasoning-section">
+                      <p className="text-[11px] text-white/25 italic leading-relaxed">{decisions.reasoning[selectedType]}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
         {/* Footer hint */}
-        <div className="px-6 py-3 border-t border-white/5 flex items-center justify-between">
-          <span className="font-mono text-[10px] tracking-widest uppercase text-white/15">
-            esc to close
-          </span>
-          {phase === 'input' && (
-            <span className="font-mono text-[10px] tracking-widest uppercase text-white/15">
-              enter to submit
-            </span>
-          )}
+        <div className="flex justify-center mt-3">
+          <span className="font-mono text-[10px] text-white/15 tracking-widest uppercase">esc to close</span>
         </div>
       </div>
     </div>

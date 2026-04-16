@@ -4,19 +4,22 @@ import FloatingPalette from '../components/FloatingPalette';
 
 // Inject custom styles for the PiP window (spin animation, scrollbar, fonts)
 const PIP_STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-  @import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { background: #0a0a0a; color: #fff; font-family: 'Satoshi', sans-serif; overflow-x: hidden; }
-  ::selection { background: rgba(250, 204, 21, 0.3); color: white; }
+  html, body { background: #020617; color: #fff; font-family: 'Inter', -apple-system, sans-serif; overflow-x: hidden; }
+  ::selection { background: rgba(129,140,248,0.3); color: white; }
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  button:hover { opacity: 0.85; }
-  textarea::placeholder { color: rgba(255,255,255,0.2); }
-  textarea:focus { border-color: rgba(255,255,255,0.15) !important; }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  button:hover { opacity: 0.9; }
+  input::placeholder { color: rgba(148,163,184,0.4); }
+  input:focus { outline: none; }
 `;
 
 let pipWindowRef = null;
