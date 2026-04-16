@@ -159,6 +159,7 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
   const audioRef = useRef(null);
   const lastSpokenRef = useRef('');
   const recordingPromiseRef = useRef(null);
+  const detectedLangRef = useRef(null);
 
   const messages = mode === 'tilt' ? tiltMessages : decideMessages;
   const preferred = getPreferredStyle();
@@ -226,7 +227,7 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
     const conv = tiltMessages.map(m => ({ role: m.role, content: m.content }));
     try {
       const res = await fetch(`${API_URL}/api/tilt`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text.trim(), image_base64: frame || null, screen_context: screenContext || null, conversation: conv, user_preference: pref !== 'smart' ? pref : null, tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null }),
+        body: JSON.stringify({ message: text.trim(), image_base64: frame || null, screen_context: screenContext || null, conversation: conv, user_preference: pref !== 'smart' ? pref : null, tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null, language: detectedLangRef.current || null }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
       const data = await res.json();
@@ -280,7 +281,7 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
     const memory = getMemory(); const pref = getPreferredStyle();
     try {
       const res = await fetch(`${API_URL}/api/generate-decisions`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input_text: text.trim(), context: screenContext || null, user_preference: pref !== 'smart' ? pref : null, tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null, modifier: modifier || null, previous_response: prevResponse || null }),
+        body: JSON.stringify({ input_text: text.trim(), context: screenContext || null, user_preference: pref !== 'smart' ? pref : null, tone_traits: memory.toneTraits.length > 0 ? memory.toneTraits : null, modifier: modifier || null, previous_response: prevResponse || null, language: detectedLangRef.current || null }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.detail || 'Failed'); }
       const data = await res.json();
@@ -312,6 +313,7 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
     if (input.trim().toLowerCase() === '/clear') {
       setInput('');
       setError(null);
+      detectedLangRef.current = null;
       if (mode === 'tilt') {
         setTiltMessages([]);
         if (guideActive) stopGuide();
@@ -325,8 +327,9 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
       }
       return;
     }
-    if (mode === 'decide') sendDecide(input);
-    else sendTilt(input);
+    // Manual typing = reset to English (language only sticky for voice)
+    if (mode === 'decide') { detectedLangRef.current = null; sendDecide(input); }
+    else { detectedLangRef.current = null; sendTilt(input); }
   }, [input, mode, sendTilt, sendDecide, guideActive, stopGuide]);
 
   // Pills fill input — never auto-send. User stays in control.
@@ -367,6 +370,8 @@ function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns
       const res = await fetch(`${API_URL}/api/transcribe`, { method: 'POST', body: form });
       if (!res.ok) throw new Error('Transcription failed');
       const data = await res.json();
+      // Store detected language for LLM + TTS
+      if (data.language) detectedLangRef.current = data.language;
       if (data.text?.trim()) { setInput(data.text.trim()); setTimeout(() => { if (mode === 'decide') sendDecide(data.text.trim()); else sendTilt(data.text.trim()); }, 300); }
     } catch (err) { setError(err.message); } finally { setTranscribing(false); }
   }, [mode, sendTilt, sendDecide]);
