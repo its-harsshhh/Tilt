@@ -4,7 +4,7 @@ import { setVideoElement } from '../hooks/pipHelper';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-export default function ScreenShareView({ stream, onStop, onOpenPalette, captureContextRef }) {
+export default function ScreenShareView({ stream, onStop, onOpenPalette, captureContextRef, captureActivityRef }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isCapturing, setIsCapturing] = useState(false);
@@ -60,6 +60,9 @@ export default function ScreenShareView({ stream, onStop, onOpenPalette, capture
 
         if (captureContextRef) {
           captureContextRef.current = ctx_text;
+        }
+        if (captureActivityRef) {
+          captureActivityRef.current = activity;
         }
       }
     } catch (err) {

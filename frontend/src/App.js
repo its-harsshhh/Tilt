@@ -10,6 +10,7 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pipSupported, setPipSupported] = useState(false);
   const captureContextRef = useRef('Working');
+  const captureActivityRef = useRef('Browse');
 
   useEffect(() => {
     setPipSupported('documentPictureInPicture' in window);
@@ -28,7 +29,7 @@ export default function App() {
       setIsSharing(true);
 
       setTimeout(async () => {
-        const pip = await openFloatingPalette(captureContextRef.current);
+        const pip = await openFloatingPalette(captureContextRef.current, captureActivityRef.current);
         if (!pip) window.focus();
       }, 500);
 
@@ -57,7 +58,7 @@ export default function App() {
         const newCtx = captureContextRef.current;
         if (newCtx !== lastContextRef.current) {
           lastContextRef.current = newCtx;
-          renderPalette(newCtx);
+          renderPalette(newCtx, captureActivityRef.current);
         }
       }
     }, 12000);
@@ -69,7 +70,7 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         if (isSharing) {
-          if (pipSupported) openFloatingPalette(captureContextRef.current);
+          if (pipSupported) openFloatingPalette(captureContextRef.current, captureActivityRef.current);
           else setPaletteOpen((prev) => !prev);
         } else {
           startScreenShare();
@@ -107,6 +108,7 @@ export default function App() {
             onStop={stopScreenShare}
             onOpenPalette={handleOpenPalette}
             captureContextRef={captureContextRef}
+            captureActivityRef={captureActivityRef}
           />
         </div>
       )}

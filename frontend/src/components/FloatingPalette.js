@@ -6,31 +6,41 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 const TILT_ICON_SVG = `<svg width="738" height="482" viewBox="0 0 738 482" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M350.531 196.624L352.753 197.457C354.06 202.978 302.483 453.235 296.829 481.207L165.513 481.203L162.854 480.035C161.5 471.742 204.033 270.846 209.238 247.113C249.839 229.547 306.098 215.246 350.531 196.624Z" fill="white"/><path d="M737.508 0C672.666 35.4666 644.52 52.7052 572.998 80.8864C567.602 82.6882 558.684 85.9164 553.404 87.1426C518.816 101.993 462.272 119.645 426.196 130.248C371.896 146.207 309.881 163.299 253.959 176.005L248.565 177.22C239.517 181.258 180.231 194.961 168.271 197.86C112.084 211.361 55.9912 225.256 0 239.544L25.7739 105.836C83.2496 99.5242 155.99 85.3555 215.305 76.6787L421.234 44.6443C456.568 39.1878 498.244 31.9869 533.281 28.2369C542.046 25.7658 567.113 22.7049 577.236 21.2403L590.026 19.3714C619.875 15.0433 649.758 10.9463 679.671 7.08083C698.019 4.75801 719.844 2.95118 737.508 0Z" fill="url(#g1)"/><defs><linearGradient id="g1" x1="0" y1="222" x2="738" y2="0" gradientUnits="userSpaceOnUse"><stop stop-color="#2DB7DB"/><stop offset="0.49" stop-color="#3D29A9"/><stop offset="1" stop-color="#E82692"/></linearGradient></defs></svg>`;
 const TILT_ICON_DATA_URI = 'data:image/svg+xml,' + encodeURIComponent(TILT_ICON_SVG);
 
-// Pill definitions
-const TILT_PILLS = [
-  "Summarize what I'm looking at",
-  "What should I do next?",
-  "Is this a good decision?",
-  "Improve this message",
-  "Spot issues here",
-  "Give a better option",
-];
+// Context-aware pill sets — keyed by activity type from screen analysis
+const TILT_PILLS_BY_ACTIVITY = {
+  Email:    ["Summarize this email", "Help me reply", "Is this urgent?", "Draft a follow-up", "What should I do?"],
+  Code:     ["Explain this code", "Find the bug here", "Suggest a better way", "Simplify this", "What does this do?"],
+  Chat:     ["Reply to this message", "Make this clearer", "Summarize this convo", "How to say no here", "What's the right tone?"],
+  Document: ["Summarize this", "Find key points", "Improve this section", "What's missing?", "Make it clearer"],
+  Calendar: ["Should I accept this?", "Draft a decline", "What to prepare?", "Suggest a better time", "Is this worth it?"],
+  Social:   ["What's happening here?", "Should I respond?", "Draft a comment", "Summarize this post", "What's the context?"],
+  Shopping: ["Is this a good deal?", "Compare alternatives", "What am I missing?", "Should I buy this?", "Find better options"],
+  Browse:   ["What is this about?", "Summarize this page", "What should I do?", "Find the key info", "Is this trustworthy?"],
+  default:  ["Summarize what I'm looking at", "What should I do next?", "Improve this message", "Spot issues here", "Give a better option"],
+};
 
-const DECIDE_PILLS = [
-  "Help me reply to this",
-  "Make this more confident",
-  "Say this more clearly",
-  "Handle this politely",
-  "What should I do here?",
-  "Rewrite this better",
-];
+const DECIDE_PILLS_BY_ACTIVITY = {
+  Email:    ["Help me reply to this", "Make my reply confident", "Say no gracefully", "Set a boundary", "Handle this politely"],
+  Code:     ["How to approach this", "Explain to my team", "Push back on this", "Ask for help with this", "Is this the right way?"],
+  Chat:     ["Reply to this", "Make this more direct", "Handle diplomatically", "Set expectations", "Say this clearly"],
+  Document: ["Improve this writing", "Make this more concise", "Rewrite this section", "Is the tone right?", "Strengthen this point"],
+  Calendar: ["Accept or decline?", "Suggest rescheduling", "Set conditions first", "How to say maybe", "Counter-propose"],
+  Social:   ["Draft a response", "Make this wittier", "Should I engage?", "Handle this gracefully", "Ignore or respond?"],
+  Shopping: ["Buy or wait?", "Negotiate the price", "Ask the right questions", "Walk away or commit?", "What's the risk?"],
+  Browse:   ["What should I do here?", "Help me decide", "Make this more confident", "Handle this politely", "Say this clearly"],
+  default:  ["Help me reply to this", "Make this more confident", "Say this more clearly", "Handle this politely", "What should I do here?"],
+};
+
+function getPills(map, activity) {
+  if (activity && map[activity]) return map[activity];
+  return map.default;
+}
 
 const CONTEXT_PILLS = [
   "Show trade-offs",
   "What am I missing?",
   "Make it shorter",
   "Make it more direct",
-  "Explain why",
   "Alternative approach",
 ];
 
@@ -95,21 +105,25 @@ function InsightLayer({ insights }) {
   );
 }
 
-export default function FloatingPalette({ screenContext, captureFrameFn, micFns, collapsed, onCollapse, onExpand }) {
-  if (collapsed) {
-    return (
-      <div data-testid="floating-palette-collapsed" onClick={onExpand} style={{
-        width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(15,23,42,0.95)', cursor: 'pointer',
-      }}>
-        <img src={TILT_ICON_DATA_URI} alt="Tilt" style={{ width: '32px', height: 'auto', opacity: 0.9 }} />
+export default function FloatingPalette({ screenContext, screenActivity, captureFrameFn, micFns, collapsed, onCollapse, onExpand }) {
+  return (
+    <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
+      {collapsed && (
+        <div data-testid="floating-palette-collapsed" onClick={onExpand} style={{
+          position: 'absolute', inset: 0, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(15,23,42,0.95)', cursor: 'pointer',
+        }}>
+          <img src={TILT_ICON_DATA_URI} alt="Tilt" style={{ width: '32px', height: 'auto', opacity: 0.9 }} />
+        </div>
+      )}
+      <div style={{ width: '100%', height: '100%', visibility: collapsed ? 'hidden' : 'visible' }}>
+        <PaletteExpanded screenContext={screenContext} screenActivity={screenActivity} captureFrameFn={captureFrameFn} micFns={micFns} onCollapse={onCollapse} />
       </div>
-    );
-  }
-  return <PaletteExpanded screenContext={screenContext} captureFrameFn={captureFrameFn} micFns={micFns} onCollapse={onCollapse} />;
+    </div>
+  );
 }
 
-function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) {
+function PaletteExpanded({ screenContext, screenActivity, captureFrameFn, micFns, onCollapse }) {
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('tilt');
   const [loading, setLoading] = useState(false);
@@ -314,15 +328,16 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
     else sendTilt(input);
   }, [input, mode, sendTilt, sendDecide, guideActive, stopGuide]);
 
+  // Pills fill input — never auto-send. User stays in control.
   const handlePillSelect = useCallback((pill) => {
-    if (mode === 'tilt') { setInput(pill); setTimeout(() => sendTilt(pill), 50); }
-    else { setInput(pill); setTimeout(() => sendDecide(pill), 50); }
-  }, [mode, sendTilt, sendDecide]);
+    setInput(pill);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
 
   const handleTiltPillThenDecide = useCallback((pill) => {
     setMode('decide'); setInput(pill);
-    setTimeout(() => sendDecide(pill), 50);
-  }, [sendDecide]);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
 
   // Voice
   const startRecording = useCallback(async () => {
@@ -411,8 +426,11 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
       {/* Content */}
       <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
-        {/* Screen context — compact, purposeful */}
-        {hasCtx && !guideActive && messages.length === 0 && !loading && (
+        {/* Screen context — visible in both tabs when empty */}
+        {hasCtx && !guideActive && (
+          (mode === 'tilt' && tiltMessages.length === 0 && !loading) ||
+          (mode === 'decide' && decideMessages.length === 0 && !loading && !decisions)
+        ) && (
           <div data-testid="pip-screen-context" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(99,102,241,0.04)', borderRadius: '8px', padding: '6px 10px', border: '1px solid rgba(99,102,241,0.06)' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(129,140,248,0.5)" strokeWidth="2" style={{ flexShrink: 0 }}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
             <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -431,7 +449,7 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
               {hasCtx ? 'Ask me anything or pick a prompt below.' : 'Share your screen and ask anything.'}
             </p>
             <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.2)', margin: '0 0 8px' }}>Try asking</p>
-            <Pills items={TILT_PILLS} onSelect={(p) => handlePillSelect(p)} testPrefix="tilt" />
+            <Pills items={getPills(TILT_PILLS_BY_ACTIVITY, screenActivity)} onSelect={(p) => handlePillSelect(p)} testPrefix="tilt" />
           </div>
         )}
 
@@ -445,7 +463,7 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
               Describe a situation and I'll give you 3 ways to handle it.
             </p>
             <p style={{ fontSize: '10px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,0.2)', margin: '0 0 8px' }}>Quick prompts</p>
-            <Pills items={DECIDE_PILLS} onSelect={(p) => handlePillSelect(p)} testPrefix="decide" />
+            <Pills items={getPills(DECIDE_PILLS_BY_ACTIVITY, screenActivity)} onSelect={(p) => handlePillSelect(p)} testPrefix="decide" />
           </div>
         )}
 

@@ -244,15 +244,30 @@ async def tilt_unified(request: TiltRequest):
 
 
 def _is_guidance_request(message: str) -> bool:
-    """Heuristic: detect if the user is asking for step-by-step guidance."""
+    """Heuristic: detect if the user is asking for step-by-step guidance or wants an action done on screen."""
     msg = message.lower().strip()
     guide_triggers = [
-        "how do i ", "how to ", "show me how", "guide me", "help me ",
-        "walk me through", "take me to", "where do i ", "where is ",
-        "i want to ", "i need to ", "can you show", "navigate to",
-        "delete this", "create a ", "set up ", "configure ", "change the",
-        "update the", "remove the", "add a ", "open the", "find the",
-        "go to ", "click on", "enable ", "disable ", "turn on", "turn off",
+        # Questions
+        "how do i ", "how to ", "how can i ",
+        # Requests
+        "show me", "guide me", "help me ", "walk me through", "take me to",
+        "can you show", "can you help",
+        # Location
+        "where do i ", "where is ", "where can i ",
+        # Intent - "I want/need"
+        "i want to ", "i need to ", "i'd like to ",
+        # Direct commands - actions on screen
+        "give me ", "get me ", "get the ", "copy the ", "share the ", "send the ",
+        "open ", "close ", "click ", "press ", "tap ", "select ", "scroll ",
+        "navigate to", "go to ", "switch to ", "move to ",
+        "delete ", "remove ", "create ", "add ", "set up ", "configure ",
+        "change ", "update ", "edit ", "modify ", "rename ",
+        "enable ", "disable ", "turn on", "turn off",
+        "find ", "search ", "look for ", "locate ",
+        "download ", "upload ", "export ", "import ", "save ",
+        "log in", "log out", "sign in", "sign out", "sign up",
+        # Shortened imperatives
+        "do this", "do that", "make it ", "put ", "drag ",
     ]
     return any(msg.startswith(t) or t in msg for t in guide_triggers)
 
@@ -279,7 +294,7 @@ Your job:
 - If they ask how to respond, give a copy-paste ready response
 - Use screen context to be specific{preference_info}
 
-Write like a sharp, helpful coworker. No fluff."""
+Write like a sharp coworker who respects your time. Clear and direct — no filler, no hedging. Start with the answer. Short sentences. Never say "I think" or "perhaps". Just say it."""
 
     session_id = f"tilt-chat-{uuid.uuid4().hex[:8]}"
 
@@ -522,7 +537,7 @@ Your job:
 - Don't be generic — use the screen context to be specific and useful
 - You can reference what you see on their screen naturally{preference_info}
 
-Write like a sharp, helpful coworker. No fluff, no corporate jargon. Be real."""
+Write like a sharp coworker who respects your time. Clear and direct — no filler, no hedging. Start with the answer. Short sentences. Never say "I think" or "perhaps" or "you might want to". Just say it."""
 
     session_id = f"tilt-assist-{uuid.uuid4().hex[:8]}"
 
@@ -575,57 +590,35 @@ async def generate_decisions(request: DecisionRequest):
     if request.context:
         screen_context = f"\nContext from user's current activity: {request.context}"
 
-    system_prompt = """You are Tilt — a decision intelligence engine. You help users craft better responses and make sharper decisions.
+    system_prompt = """You are Tilt — a decision intelligence engine.
 
-You generate exactly 3 response options for any given situation:
-- SAFE: Polite, low-risk, conservative. Avoids conflict. Professional but careful.
-- SMART: Clear, balanced, confident. The recommended middle ground. Direct but diplomatic.
-- BOLD: Assertive, high-conviction, direct. Takes a strong stance. No hedging.
+You generate exactly 3 response options:
+- SAFE: Short + polite. Low risk, careful.
+- SMART: Best default. Clear, balanced, confident.
+- BOLD: Strong + direct. No hedging.
 
-You also provide INSIGHTS to help the user think deeper:
-- trade_offs: 1 line per option explaining the risk/reward
-- blind_spots: 1 sentence about what the user might be missing
-- recommendation: 1 sentence actionable advice on what to do now
+HARD RULES:
+- Each response: 2-3 lines MAX. Never longer.
+- Each must be copy-paste ready. No preamble.
+- Start with the action, not context.
+- No "I think", "perhaps", "maybe". Just say it.
+- Each option must feel distinctly different.
+- reasoning: exactly 1 line each. "Why this works" in 1 sentence.
+- trade_offs: exactly 1 line each.
+- blind_spots: 1 sentence max.
+- recommendation: 1 sentence max.
 
-Rules:
-- Each option MUST be distinctly different in tone and approach
-- Responses must be concise (2-4 sentences max each)
-- Write like a modern professional — no corporate jargon, no fluff
-- Responses must be immediately usable (copy-paste ready)
-- Insights must be sharp and concise — max 1-2 lines each
+You MUST respond with valid JSON only. No markdown.
 
-You MUST respond with valid JSON only. No markdown, no explanation outside JSON.
-
-Response format:
 {
-  "safe": {
-    "response": "the safe response text",
-    "label": "Safe",
-    "description": "polite, low risk"
-  },
-  "smart": {
-    "response": "the smart response text",
-    "label": "Smart",
-    "description": "clear, balanced"
-  },
-  "bold": {
-    "response": "the bold response text",
-    "label": "Bold",
-    "description": "direct, assertive"
-  },
-  "reasoning": {
-    "safe": "1-line why the safe option works",
-    "smart": "1-line why the smart option works",
-    "bold": "1-line why the bold option works"
-  },
+  "safe": {"response": "2-3 lines max", "label": "Safe", "description": "short, polite"},
+  "smart": {"response": "2-3 lines max", "label": "Smart", "description": "clear, balanced"},
+  "bold": {"response": "2-3 lines max", "label": "Bold", "description": "strong, direct"},
+  "reasoning": {"safe": "1 line", "smart": "1 line", "bold": "1 line"},
   "insights": {
-    "trade_offs": {
-      "safe": "low risk, may sound passive",
-      "smart": "balanced, most effective",
-      "bold": "strong impact, might feel pushy"
-    },
-    "blind_spots": "One sentence about what the user might be overlooking",
-    "recommendation": "One sentence — what to do right now"
+    "trade_offs": {"safe": "1 line", "smart": "1 line", "bold": "1 line"},
+    "blind_spots": "1 sentence",
+    "recommendation": "1 sentence"
   }
 }"""
 

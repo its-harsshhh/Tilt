@@ -100,12 +100,14 @@ function togglePip() {
 }
 
 let currentScreenContext = '';
+let currentActivity = 'Browse';
 
 function renderPaletteInternal() {
   if (!pipReactRoot) return;
   pipReactRoot.render(
     <FloatingPalette
       screenContext={currentScreenContext}
+      screenActivity={currentActivity}
       onRequestClose={closeFloatingPalette}
       captureFrameFn={captureFrame}
       micFns={getMicFunctions()}
@@ -116,8 +118,9 @@ function renderPaletteInternal() {
   );
 }
 
-export async function openFloatingPalette(screenContext) {
+export async function openFloatingPalette(screenContext, activity) {
   currentScreenContext = screenContext;
+  if (activity) currentActivity = activity;
 
   if (pipWindowRef && !pipWindowRef.closed) {
     if (isCollapsed) expandPip();
@@ -179,8 +182,9 @@ export async function openFloatingPalette(screenContext) {
   }
 }
 
-export function renderPalette(screenContext) {
+export function renderPalette(screenContext, activity) {
   currentScreenContext = screenContext;
+  if (activity) currentActivity = activity;
   if (!isCollapsed) renderPaletteInternal();
 }
 
