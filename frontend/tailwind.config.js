@@ -4,8 +4,8 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        heading: ['Outfit', 'sans-serif'],
-        body: ['Satoshi', 'sans-serif'],
+        heading: ['Instrument Sans', 'sans-serif'],
+        body: ['Inter', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {

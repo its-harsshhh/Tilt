@@ -1,60 +1,68 @@
 import React from 'react';
-import { Monitor, Command } from 'lucide-react';
+import { Command } from 'lucide-react';
+
+const SKY_BG = 'https://images.unsplash.com/photo-1613742631162-cdba058776b9?crop=entropy&cs=srgb&fm=jpg&ixlib=rb-4.1.0&q=85&w=1920&h=1080&fit=crop';
 
 export default function LandingPage({ onStartScreenShare }) {
   return (
     <div
-      className="relative w-full h-screen flex flex-col items-center justify-center overflow-hidden"
+      className="relative w-full h-screen flex flex-col overflow-hidden"
       data-testid="landing-page"
     >
-      {/* Gradient background blobs */}
-      <div className="absolute inset-0 bg-[#050505]">
-        <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] rounded-full bg-blue-900/20 blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-purple-900/15 blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-cyan-900/10 blur-[140px]" />
+      {/* Sky background image */}
+      <div className="absolute inset-0">
+        <img
+          src={SKY_BG}
+          alt=""
+          className="w-full h-[70%] object-cover"
+          style={{ objectPosition: '50% 60%' }}
+        />
+        {/* White gradient fade */}
+        <div className="absolute inset-0 bg-gradient-to-t from-white from-[30%] via-white/60 via-[50%] to-transparent to-[75%]" />
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center text-center px-6 max-w-3xl">
-        {/* Logo */}
-        <div className="mb-12" data-testid="tilt-logo">
-          <img src="/tilt-logo.svg" alt="Tilt" className="h-10" />
+      <div className="relative z-10 flex flex-col items-center justify-center h-full px-6 pt-0">
+        {/* Logo — on the sky */}
+        <div className="mb-6" data-testid="tilt-logo">
+          <img src="/tilt-logo.svg" alt="Tilt" className="h-8 drop-shadow-[0_1px_8px_rgba(0,0,0,0.1)]" />
         </div>
 
-        {/* Headline */}
+        {/* Headline — on the sky/cloud zone */}
         <h1
-          className="font-heading text-5xl md:text-7xl font-light tracking-tighter leading-[1.05] text-white mb-6"
+          className="font-heading text-5xl md:text-[4.5rem] font-bold tracking-tight leading-[1.1] text-white text-center mb-6"
+          style={{ textShadow: '0 2px 20px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.06)' }}
           data-testid="landing-headline"
         >
           Decide better.<br />
-          <span className="text-white/40">Not faster.</span>
+          <span className="text-white/80">Not faster.</span>
         </h1>
 
-        {/* Subheading */}
-        <p className="font-body text-lg md:text-xl text-white/40 max-w-xl mb-12 leading-relaxed">
+        {/* Subheading — transition zone */}
+        <p className="font-body text-base md:text-lg text-slate-500 max-w-lg text-center mb-9 leading-relaxed">
           AI that understands what you're doing and helps you choose — without taking over.
         </p>
 
-        {/* CTA Button */}
+        {/* CTA Button — on white */}
         <button
           onClick={onStartScreenShare}
           data-testid="start-screen-share-btn"
-          className="group relative flex items-center gap-3 px-8 py-4 rounded-2xl bg-white text-black font-body font-medium text-base
-                     hover:scale-[1.02] active:scale-[0.98] transition-all duration-200
-                     shadow-[0_0_40px_rgba(255,255,255,0.1)] hover:shadow-[0_0_60px_rgba(255,255,255,0.2)]"
+          className="px-9 py-3.5 rounded-lg bg-slate-900 text-white font-body font-medium text-[15px]
+                     hover:bg-slate-800 active:scale-[0.98] transition-all duration-150
+                     shadow-md shadow-slate-900/15"
         >
           Start Decision Layer
         </button>
 
-        {/* Hint */}
-        <div className="mt-10 flex flex-col items-center gap-3">
-          <p className="font-body text-sm text-white/25 leading-relaxed">
+        {/* Hint — on white */}
+        <div className="mt-7 flex flex-col items-center gap-2">
+          <p className="font-body text-[13px] text-slate-400 leading-relaxed">
             Share your screen once. Call it anytime with{' '}
-            <kbd className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/10 font-mono text-[11px] text-white/40">
-              <Command size={10} className="inline" />K
+            <kbd className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 font-mono text-[10px] text-slate-500">
+              <Command size={9} className="inline" />K
             </kbd>
           </p>
-          <p className="font-body text-xs text-white/15 tracking-wide">
+          <p className="font-body text-[11px] text-slate-300">
             One shortcut. Better decisions everywhere.
           </p>
         </div>
