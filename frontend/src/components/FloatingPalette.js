@@ -5,7 +5,8 @@ const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function FloatingPalette({ screenContext, captureFrameFn }) {
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState([]);
+  const [tiltMessages, setTiltMessages] = useState([]);
+  const [decideMessages, setDecideMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('tilt');
@@ -20,6 +21,10 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
   const [annotatedImage, setAnnotatedImage] = useState(null);
   const guideIntervalRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Active messages based on mode
+  const messages = mode === 'tilt' ? tiltMessages : decideMessages;
+  const setMessages = mode === 'tilt' ? setTiltMessages : setDecideMessages;
   const scrollRef = useRef(null);
   const submittingRef = useRef(false); // prevent double submit
 
@@ -96,13 +101,13 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
     if (!text.trim() || submittingRef.current) return;
     submittingRef.current = true;
     const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
-    setMessages(prev => [...prev, userMsg]);
+    setTiltMessages(prev => [...prev, userMsg]);
     setInput(''); setLoading(true); setError(null);
 
     const memory = getMemory();
     const preferred = getPreferredStyle();
     const frame = captureFrame();
-    const conversation = messages.map(m => ({ role: m.role, content: m.content }));
+    const conversation = tiltMessages.map(m => ({ role: m.role, content: m.content }));
 
     try {
       const res = await fetch(`${API_URL}/api/tilt`, {
@@ -127,10 +132,9 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
         setGuideSteps([]);
         setGuideResult(data);
         if (frame) drawAnnotation(frame, data.region);
-        // Add guide as a message so it appears inline below user msg
-        setMessages(prev => [...prev, {
+        setTiltMessages(prev => [...prev, {
           role: 'assistant', id: Date.now() + 1,
-          isGuide: true, guideData: data, guideImage: null, // image set async
+          isGuide: true, guideData: data, guideImage: null,
           content: data.instruction,
         }]);
         if (guideIntervalRef.current) clearInterval(guideIntervalRef.current);
@@ -138,11 +142,11 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
           autoAdvance(text.trim(), data, 1, []);
         }, 6000);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.response, id: Date.now() + 1 }]);
+        setTiltMessages(prev => [...prev, { role: 'assistant', content: data.response, id: Date.now() + 1 }]);
       }
     } catch (err) { setError(err.message); }
     finally { setLoading(false); submittingRef.current = false; setTimeout(() => inputRef.current?.focus(), 100); }
-  }, [messages, screenContext, captureFrame, drawAnnotation]);
+  }, [tiltMessages, screenContext, captureFrame, drawAnnotation]);
 
   // Auto-advance guide
   const autoAdvance = useCallback(async (task, prevResult, prevStep, prevSteps) => {
@@ -195,7 +199,7 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
     if (!text.trim() || submittingRef.current) return;
     submittingRef.current = true;
     const userMsg = { role: 'user', content: text.trim(), id: Date.now() };
-    setMessages(prev => [...prev, userMsg]);
+    setDecideMessages(prev => [...prev, userMsg]);
     setInput(''); setLoading(true); setError(null); setDecisions(null); setActiveIdx(-1);
     const memory = getMemory();
     const preferred = getPreferredStyle();
@@ -219,14 +223,14 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
 
   const handleSelectDecision = useCallback((type) => {
     if (!decisions) return;
-    saveDecision(type, messages[messages.length - 1]?.content || '', decisions[type]?.response);
-    setMessages(prev => [...prev, {
+    saveDecision(type, decideMessages[decideMessages.length - 1]?.content || '', decisions[type]?.response);
+    setDecideMessages(prev => [...prev, {
       role: 'assistant', content: decisions[type]?.response, id: Date.now(),
       decisionType: type, reasoning: decisions?.reasoning?.[type],
     }]);
     setDecisions(null); setActiveIdx(-1);
     setTimeout(() => inputRef.current?.focus(), 100);
-  }, [decisions, messages]);
+  }, [decisions, decideMessages]);
 
   const handleSubmit = useCallback(() => {
     if (!input.trim() || submittingRef.current) return;
