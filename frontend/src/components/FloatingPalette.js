@@ -3,7 +3,31 @@ import { getPreferredStyle, getInsightText, getMemory, saveDecision } from '../h
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
-export default function FloatingPalette({ screenContext, captureFrameFn }) {
+const TILT_ICON_SVG = `<svg width="738" height="482" viewBox="0 0 738 482" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M350.531 196.624L352.753 197.457C354.06 202.978 302.483 453.235 296.829 481.207L165.513 481.203L162.854 480.035C161.5 471.742 204.033 270.846 209.238 247.113C249.839 229.547 306.098 215.246 350.531 196.624Z" fill="white"/><path d="M737.508 0C672.666 35.4666 644.52 52.7052 572.998 80.8864C567.602 82.6882 558.684 85.9164 553.404 87.1426C518.816 101.993 462.272 119.645 426.196 130.248C371.896 146.207 309.881 163.299 253.959 176.005L248.565 177.22C239.517 181.258 180.231 194.961 168.271 197.86C112.084 211.361 55.9912 225.256 0 239.544L25.7739 105.836C83.2496 99.5242 155.99 85.3555 215.305 76.6787L421.234 44.6443C456.568 39.1878 498.244 31.9869 533.281 28.2369C542.046 25.7658 567.113 22.7049 577.236 21.2403L590.026 19.3714C619.875 15.0433 649.758 10.9463 679.671 7.08083C698.019 4.75801 719.844 2.95118 737.508 0Z" fill="url(#g1)"/><defs><linearGradient id="g1" x1="0" y1="222" x2="738" y2="0" gradientUnits="userSpaceOnUse"><stop stop-color="#2DB7DB"/><stop offset="0.49" stop-color="#3D29A9"/><stop offset="1" stop-color="#E82692"/></linearGradient></defs></svg>`;
+
+const TILT_ICON_DATA_URI = 'data:image/svg+xml,' + encodeURIComponent(TILT_ICON_SVG);
+
+export default function FloatingPalette({ screenContext, captureFrameFn, collapsed, onCollapse, onExpand }) {
+  if (collapsed) {
+    return (
+      <div data-testid="floating-palette-collapsed" onClick={onExpand} style={{
+        width: '100vw', height: '100vh',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(15,23,42,0.95)', cursor: 'pointer',
+      }}>
+        <img src={TILT_ICON_DATA_URI} alt="Tilt" style={{ width: '32px', height: 'auto', opacity: 0.9 }} />
+      </div>
+    );
+  }
+
+  return <FloatingPaletteExpanded
+    screenContext={screenContext}
+    captureFrameFn={captureFrameFn}
+    onCollapse={onCollapse}
+  />;
+}
+
+function FloatingPaletteExpanded({ screenContext, captureFrameFn, onCollapse }) {
   const [input, setInput] = useState('');
   const [tiltMessages, setTiltMessages] = useState([]);
   const [decideMessages, setDecideMessages] = useState([]);
@@ -265,18 +289,34 @@ export default function FloatingPalette({ screenContext, captureFrameFn }) {
       color: '#fff', height: '100vh', display: 'flex', flexDirection: 'column',
     }} onKeyDown={handleKeyDown} tabIndex={-1}>
 
-      {/* Top — two tabs */}
+      {/* Top — tabs + collapse button */}
       <div style={{ padding: '8px 12px 4px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '3px' }}>
-          {[{ key: 'tilt', label: 'Tilt' }, { key: 'decide', label: 'Decide' }].map(t => (
-            <button key={t.key} onClick={() => switchMode(t.key)} data-testid={`mode-${t.key}-btn`}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', gap: '2px', background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '3px', flex: 1 }}>
+            {[{ key: 'tilt', label: 'Tilt' }, { key: 'decide', label: 'Decide' }].map(t => (
+              <button key={t.key} onClick={() => switchMode(t.key)} data-testid={`mode-${t.key}-btn`}
+                style={{
+                  flex: 1, padding: '6px 0', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                  background: mode === t.key ? 'rgba(255,255,255,0.1)' : 'transparent',
+                  color: mode === t.key ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
+                  fontSize: '12px', fontWeight: '600', fontFamily: "'Inter', sans-serif",
+                }}>{t.label}</button>
+            ))}
+          </div>
+          {/* Collapse button */}
+          {onCollapse && (
+            <button onClick={onCollapse} data-testid="collapse-btn" title="Minimize (Cmd+K to reopen)"
               style={{
-                flex: 1, padding: '6px 0', borderRadius: '6px', border: 'none', cursor: 'pointer',
-                background: mode === t.key ? 'rgba(255,255,255,0.1)' : 'transparent',
-                color: mode === t.key ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
-                fontSize: '12px', fontWeight: '600', fontFamily: "'Inter', sans-serif",
-              }}>{t.label}</button>
-          ))}
+                width: '28px', height: '28px', borderRadius: '8px', border: 'none',
+                background: 'rgba(255,255,255,0.04)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          )}
         </div>
         {hasCtx && !guideActive && (
           <div data-testid="pip-screen-context" style={{

@@ -77,19 +77,16 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isSharing]);
 
-  // Cmd+K: open floating palette if PiP supported, else open in-tab palette
+  // Cmd+K: open/expand floating palette if PiP supported, else toggle in-tab palette
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         if (isSharing) {
           if (pipSupported) {
-            // Try to open or focus the floating palette
-            if (!isPipOpen()) {
-              openFloatingPalette(captureContextRef.current);
-            }
+            // Open or expand the floating palette
+            openFloatingPalette(captureContextRef.current);
           } else {
-            // Fallback: in-tab palette
             setPaletteOpen((prev) => !prev);
           }
         }
