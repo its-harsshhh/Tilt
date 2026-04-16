@@ -102,7 +102,7 @@ function FeaturesSection() {
         <div className="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-white" />
       </div>
 
-      <div className="max-w-3xl mx-auto relative z-10">
+      <div className="max-w-5xl mx-auto relative z-10">
         {/* Section header */}
         <div className="text-center mb-16">
           <h2
@@ -117,7 +117,7 @@ function FeaturesSection() {
         </div>
 
         {/* Bento grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {FEATURES.map((f, i) => (
             <FeatureCard key={i} title={f.title} copy={f.copy} illustration={f.illustration} />
           ))}
