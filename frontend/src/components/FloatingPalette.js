@@ -254,7 +254,10 @@ function PaletteExpanded({ screenContext, captureFrameFn, micFns, onCollapse }) 
   const sendDecide = useCallback(async (text, modifier, prevResponse) => {
     if (!text.trim() || submittingRef.current) return;
     submittingRef.current = true;
-    if (!modifier) {
+    if (modifier) {
+      // Context pill refinement — show the pill as user message
+      setDecideMessages(prev => [...prev, { role: 'user', content: modifier, id: Date.now() }]);
+    } else {
       setDecideMessages(prev => [...prev, { role: 'user', content: text.trim(), id: Date.now() }]);
       setLastDecideInput(text.trim());
     }
