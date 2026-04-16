@@ -175,10 +175,10 @@ export default function FloatingPalette({ screenContext }) {
 
         {/* Loading shimmer */}
         {phase === 'loading' && (
-          <div data-testid="pip-loading" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '8px 0' }}>
+          <div data-testid="pip-loading" style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '4px 0' }}>
             {[1, 2, 3].map(i => (
               <div key={i} style={{
-                height: '64px', borderRadius: '12px',
+                height: '40px', borderRadius: '10px',
                 background: 'linear-gradient(90deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 100%)',
                 backgroundSize: '200% 100%', animation: 'shimmer 1.5s ease-in-out infinite',
               }} />
@@ -186,9 +186,9 @@ export default function FloatingPalette({ screenContext }) {
           </div>
         )}
 
-        {/* Decision cards */}
+        {/* Decision cards — compact rows */}
         {phase === 'decisions' && decisions && (
-          <div data-testid="pip-decision-cards" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div data-testid="pip-decision-cards" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {['safe', 'smart', 'bold'].map((type) => {
               const d = decisions[type];
               const c = cardStyles[type];
@@ -196,30 +196,33 @@ export default function FloatingPalette({ screenContext }) {
               return (
                 <button key={type} onClick={() => handleSelect(type)} data-testid={`pip-card-${type}`}
                   style={{
-                    width: '100%', textAlign: 'left', padding: '12px 14px',
-                    borderRadius: '12px', border: `1px solid ${c.border}`,
-                    background: c.bg, cursor: 'pointer', transition: 'all 0.12s',
-                    position: 'relative', fontFamily: "'Inter', sans-serif",
-                    outline: isPref ? `1px solid rgba(129,140,248,0.3)` : 'none',
-                  }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <span style={{
-                      fontSize: '10px', fontWeight: '600', textTransform: 'uppercase',
-                      letterSpacing: '0.08em', color: c.accent,
-                    }}>{c.tag}</span>
-                    {isPref && <span style={{
-                      fontSize: '9px', fontWeight: '500', color: 'rgba(129,140,248,0.6)',
-                      background: 'rgba(129,140,248,0.08)', padding: '1px 6px', borderRadius: '4px',
-                    }} data-testid={`pip-preferred-${type}`}>preferred</span>}
-                    <span style={{
-                      fontSize: '10px', color: 'rgba(255,255,255,0.2)', marginLeft: 'auto',
-                    }}>{d?.description}</span>
-                  </div>
-                  <p style={{
-                    fontSize: '13px', lineHeight: '1.5', margin: 0,
-                    color: 'rgba(255,255,255,0.55)',
-                    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                  }}>{d?.response}</p>
+                    width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 12px', borderRadius: '10px', border: 'none',
+                    background: isPref ? 'rgba(129,140,248,0.08)' : 'transparent',
+                    cursor: 'pointer', transition: 'background 0.1s',
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                  onMouseEnter={(e) => { if (!isPref) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                  onMouseLeave={(e) => { if (!isPref) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {/* Tag pill */}
+                  <span style={{
+                    fontSize: '10px', fontWeight: '600', textTransform: 'uppercase',
+                    letterSpacing: '0.06em', color: c.accent, flexShrink: 0,
+                    width: '42px', textAlign: 'left',
+                  }}>{c.tag}</span>
+
+                  {/* Preview — single line */}
+                  <span style={{
+                    flex: 1, fontSize: '13px', color: 'rgba(255,255,255,0.45)',
+                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    textAlign: 'left',
+                  }}>{d?.response}</span>
+
+                  {/* Arrow */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="2" style={{ flexShrink: 0 }}>
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
                 </button>
               );
             })}

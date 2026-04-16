@@ -139,36 +139,36 @@ export default function CommandPalette({ isOpen, onClose, screenContext }) {
 
               {/* Loading shimmer */}
               {phase === 'loading' && (
-                <div className="flex flex-col gap-2" data-testid="loading-state">
+                <div className="flex flex-col gap-0.5" data-testid="loading-state">
                   {[1,2,3].map(i => (
-                    <div key={i} className="h-16 rounded-xl skeleton-pulse" />
+                    <div key={i} className="h-10 rounded-lg skeleton-pulse" />
                   ))}
                 </div>
               )}
 
-              {/* Decision cards */}
+              {/* Decision cards — compact rows */}
               {phase === 'decisions' && decisions && (
-                <div className="flex flex-col gap-1.5 animate-slide-up" data-testid="decision-cards">
+                <div className="flex flex-col gap-0 animate-slide-up" data-testid="decision-cards">
                   {['safe', 'smart', 'bold'].map((type) => {
                     const c = cardConfig[type]; const Icon = c.icon;
                     const d = decisions[type]; const isPref = type === preferred;
                     return (
                       <button key={type} onClick={() => handleSelect(type)} data-testid={`decision-card-${type}`}
-                        className={`w-full text-left px-4 py-3 rounded-xl ${c.bg} border ${c.border}
-                          hover:bg-white/[0.08] transition-all cursor-pointer
-                          ${isPref ? 'ring-1 ring-indigo-400/20' : ''}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Icon size={13} className={c.accent} strokeWidth={1.5} />
-                          <span className={`text-[10px] font-semibold uppercase tracking-widest ${c.accent}`}>
-                            {d?.label}
-                          </span>
-                          {isPref && (
-                            <span className="text-[9px] font-medium text-indigo-400/50 bg-indigo-400/[0.08] px-1.5 py-0.5 rounded"
-                              data-testid={`preferred-badge-${type}`}>preferred</span>
-                          )}
-                          <span className="text-[10px] text-white/20 ml-auto">{d?.description}</span>
-                        </div>
-                        <p className="text-[13px] text-white/50 leading-relaxed line-clamp-2">{d?.response}</p>
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg
+                          hover:bg-white/[0.05] transition-colors cursor-pointer
+                          ${isPref ? 'bg-indigo-500/[0.06]' : ''}`}>
+                        <Icon size={14} className={c.accent} strokeWidth={1.5} />
+                        <span className={`text-[10px] font-semibold uppercase tracking-wide ${c.accent} w-10 text-left flex-shrink-0`}>
+                          {d?.label}
+                        </span>
+                        <span className="text-[13px] text-white/45 truncate flex-1 text-left">{d?.response}</span>
+                        {isPref && (
+                          <span className="text-[9px] font-medium text-indigo-400/50 bg-indigo-400/[0.08] px-1.5 py-0.5 rounded flex-shrink-0"
+                            data-testid={`preferred-badge-${type}`}>preferred</span>
+                        )}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/15 flex-shrink-0">
+                          <polyline points="9 18 15 12 9 6"/>
+                        </svg>
                       </button>
                     );
                   })}
