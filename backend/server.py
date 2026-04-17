@@ -35,6 +35,7 @@ class DecisionRequest(BaseModel):
     tone_traits: Optional[list] = None
     modifier: Optional[str] = None
     previous_response: Optional[str] = None
+    language: Optional[str] = None
 
 
 class DecisionResponse(BaseModel):
@@ -85,6 +86,7 @@ class TiltRequest(BaseModel):
     guide_task: Optional[str] = None
     completed_steps: Optional[list] = []
     step_number: Optional[int] = 1
+    language: Optional[str] = None
 
 
 @app.get("/api/health")
@@ -116,11 +118,14 @@ async def transcribe_audio(file: UploadFile = File(...)):
             response = await stt.transcribe(
                 file=audio_file,
                 model="whisper-1",
-                response_format="json",
+                response_format="verbose_json",
             )
 
         os.unlink(tmp_path)
-        return {"text": response.text, "status": "ok"}
+
+        # Detect language from Whisper response
+        detected_lang = getattr(response, 'language', None) or 'en'
+        return {"text": response.text, "language": detected_lang, "status": "ok"}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
@@ -284,6 +289,10 @@ async def _chat_assist(request: TiltRequest):
     if request.tone_traits and len(request.tone_traits) > 0:
         preference_info += f" Tone traits: {', '.join(request.tone_traits)}."
 
+    lang_instruction = ""
+    if request.language and request.language != "en":
+        lang_instruction = f"\n\nIMPORTANT: The user is communicating in {request.language}. You MUST respond entirely in {request.language}."
+
     system_prompt = f"""You are Tilt — an AI assistant that sees the user's screen and helps them get things done.{screen_info}
 
 Your job:
@@ -294,7 +303,7 @@ Your job:
 - If they ask how to respond, give a copy-paste ready response
 - Use screen context to be specific{preference_info}
 
-Write like a sharp coworker who respects your time. Clear and direct — no filler, no hedging. Start with the answer. Short sentences. Never say "I think" or "perhaps". Just say it."""
+Write like a sharp coworker who respects your time. Clear and direct — no filler, no hedging. Start with the answer. Short sentences. Never say "I think" or "perhaps". Just say it.{lang_instruction}"""
 
     session_id = f"tilt-chat-{uuid.uuid4().hex[:8]}"
 
@@ -590,6 +599,10 @@ async def generate_decisions(request: DecisionRequest):
     if request.context:
         screen_context = f"\nContext from user's current activity: {request.context}"
 
+    lang_instruction = ""
+    if request.language and request.language != "en":
+        lang_instruction = f"\n\nIMPORTANT: The user is communicating in {request.language}. ALL response text, reasoning, trade_offs, blind_spots, and recommendation MUST be written entirely in {request.language}. Keep JSON keys in English."
+
     system_prompt = """You are Tilt — a decision intelligence engine.
 
 You generate exactly 3 response options:
@@ -628,7 +641,7 @@ You MUST respond with valid JSON only. No markdown.
         if request.previous_response:
             modifier_context += f"\nPrevious response they selected: \"{request.previous_response}\"\nApply the modifier to improve/change the response accordingly."
 
-    user_prompt = f"Situation/message to respond to:\n\"{request.input_text}\"{screen_context}{preference_context}{tone_context}{modifier_context}\n\nGenerate the 3 decision options + insights as JSON."
+    user_prompt = f"Situation/message to respond to:\n\"{request.input_text}\"{screen_context}{preference_context}{tone_context}{modifier_context}{lang_instruction}\n\nGenerate the 3 decision options + insights as JSON."
 
     session_id = f"tilt-{uuid.uuid4().hex[:8]}"
 
